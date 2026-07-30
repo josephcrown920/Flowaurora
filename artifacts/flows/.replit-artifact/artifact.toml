@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Flows"
+version = "1.0.0"
+id = "artifacts/flows"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24792
+
+[services.development]
+run = "pnpm --filter @workspace/flows run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/flows", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/flows/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24792"
+BASE_PATH = "/"
