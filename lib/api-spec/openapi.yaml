@@ -10,6 +10,16 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: characters
+    description: Reusable character library for consistent casting across shots
+  - name: projects
+    description: Storyboard projects
+  - name: shots
+    description: Individual shots within a storyboard project
+  - name: director
+    description: AI Director — proposes shot lists from a logline
+  - name: generate
+    description: AI-powered image generation for characters and shots
 paths:
   /healthz:
     get:
@@ -24,6 +34,425 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /characters:
+    get:
+      operationId: listCharacters
+      tags: [characters]
+      summary: List characters
+      responses:
+        "200":
+          description: List of characters
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Character"
+    post:
+      operationId: createCharacter
+      tags: [characters]
+      summary: Create a character
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CharacterInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Character"
+
+  /characters/{id}:
+    get:
+      operationId: getCharacter
+      tags: [characters]
+      summary: Get a character
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Character
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Character"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateCharacter
+      tags: [characters]
+      summary: Update a character
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CharacterUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Character"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteCharacter
+      tags: [characters]
+      summary: Delete a character
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List projects
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /projects/{id}/shots:
+    get:
+      operationId: listProjectShots
+      tags: [shots]
+      summary: List shots for a project, ordered by position
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of shots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shot"
+    post:
+      operationId: createShot
+      tags: [shots]
+      summary: Create a shot in a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShotInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shot"
+
+  /shots:
+    get:
+      operationId: listShots
+      tags: [shots]
+      summary: List shots across all projects (gallery view)
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: characterId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: hasMedia
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of shots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shot"
+
+  /shots/{id}:
+    get:
+      operationId: getShot
+      tags: [shots]
+      summary: Get a shot
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Shot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shot"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateShot
+      tags: [shots]
+      summary: Update a shot
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShotUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shot"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteShot
+      tags: [shots]
+      summary: Delete a shot
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /director/propose-shots:
+    post:
+      operationId: proposeShots
+      tags: [director]
+      summary: Ask the AI Director to propose a shot list from a logline
+      description: >
+        Requires an AI provider to be connected via Replit AI Integrations.
+        Returns 503 with an error message if no provider is currently available.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposeShotsInput"
+      responses:
+        "200":
+          description: Proposed shots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposeShotsResponse"
+        "503":
+          description: AI provider unavailable
+
+  /generate/character-portrait:
+    post:
+      operationId: generateCharacterPortrait
+      tags: [generate]
+      summary: Generate a reference portrait for a character
+      description: >
+        Requires an AI provider to be connected via Replit AI Integrations.
+        Returns 503 with an error message if no provider is currently available.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateCharacterPortraitInput"
+      responses:
+        "200":
+          description: Updated character with a new reference portrait
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Character"
+        "503":
+          description: AI provider unavailable
+
+  /generate/shot-image:
+    post:
+      operationId: generateShotImage
+      tags: [generate]
+      summary: Generate an image for a shot, grounded in its assigned characters
+      description: >
+        Requires an AI provider to be connected via Replit AI Integrations.
+        Returns 503 with an error message if no provider is currently available.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateShotImageInput"
+      responses:
+        "200":
+          description: Updated shot with a new generated image
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shot"
+        "503":
+          description: AI provider unavailable
+
+  /generate/shot-angle:
+    post:
+      operationId: generateShotAngle
+      tags: [generate]
+      summary: Generate a new camera-angle variant of an existing shot
+      description: >
+        Requires an AI provider to be connected via Replit AI Integrations.
+        Returns 503 with an error message if no provider is currently available.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateShotAngleInput"
+      responses:
+        "201":
+          description: New shot created as an angle variant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shot"
+        "503":
+          description: AI provider unavailable
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +463,163 @@ components:
       required:
         - status
 
+    Character:
+      type: object
+      required: [id, name, description, wardrobe, referenceImageUrl, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        wardrobe: { type: string }
+        referenceImageUrl: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CharacterInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        wardrobe: { type: string }
+        referenceImageUrl: { type: ["string", "null"] }
+    CharacterUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        wardrobe: { type: string }
+        referenceImageUrl: { type: ["string", "null"] }
+
+    Project:
+      type: object
+      required: [id, title, logline, stylePreset, status, shotCount, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        logline: { type: string }
+        stylePreset: { type: string }
+        status: { type: string, enum: [draft, storyboarding, generating, complete] }
+        shotCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ProjectInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1 }
+        logline: { type: string }
+        stylePreset: { type: string }
+    ProjectUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        logline: { type: string }
+        stylePreset: { type: string }
+        status: { type: string, enum: [draft, storyboarding, generating, complete] }
+
+    Shot:
+      type: object
+      required:
+        [
+          id,
+          projectId,
+          position,
+          shotType,
+          cameraAngle,
+          prompt,
+          imageUrl,
+          videoUrl,
+          colorGrade,
+          status,
+          parentShotId,
+          characterIds,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: integer }
+        projectId: { type: integer }
+        position: { type: integer }
+        shotType:
+          type: string
+          enum: [wide, medium, close-up, extreme-close-up, over-the-shoulder, aerial]
+        cameraAngle: { type: string }
+        prompt: { type: string }
+        imageUrl: { type: ["string", "null"] }
+        videoUrl: { type: ["string", "null"] }
+        colorGrade: { type: string }
+        status: { type: string, enum: [draft, generating, ready] }
+        parentShotId: { type: ["integer", "null"] }
+        characterIds:
+          type: array
+          items: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ShotInput:
+      type: object
+      properties:
+        shotType: { type: string }
+        cameraAngle: { type: string }
+        prompt: { type: string }
+        position: { type: integer }
+        characterIds:
+          type: array
+          items: { type: integer }
+    ShotUpdate:
+      type: object
+      properties:
+        shotType: { type: string }
+        cameraAngle: { type: string }
+        prompt: { type: string }
+        imageUrl: { type: ["string", "null"] }
+        videoUrl: { type: ["string", "null"] }
+        colorGrade: { type: string }
+        status: { type: string, enum: [draft, generating, ready] }
+        position: { type: integer }
+        characterIds:
+          type: array
+          items: { type: integer }
+
+    ProposeShotsInput:
+      type: object
+      required: [logline]
+      properties:
+        logline: { type: string, minLength: 1 }
+        stylePreset: { type: string }
+        sceneCount: { type: integer, minimum: 1, maximum: 12 }
+        characterIds:
+          type: array
+          items: { type: integer }
+    ProposedShot:
+      type: object
+      required: [shotType, cameraAngle, prompt, description]
+      properties:
+        shotType: { type: string }
+        cameraAngle: { type: string }
+        prompt: { type: string }
+        description: { type: string }
+    ProposeShotsResponse:
+      type: object
+      required: [shots]
+      properties:
+        shots:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposedShot"
+
+    GenerateCharacterPortraitInput:
+      type: object
+      required: [characterId]
+      properties:
+        characterId: { type: integer }
+    GenerateShotImageInput:
+      type: object
+      required: [shotId]
+      properties:
+        shotId: { type: integer }
+    GenerateShotAngleInput:
+      type: object
+      required: [shotId, angleLabel]
+      properties:
+        shotId: { type: integer }
+        angleLabel: { type: string, minLength: 1 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Share2, Undo2, Redo2, Users } from 'lucide-react';
+import { Play, Share2, Undo2, Redo2, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TemplatesPanel } from './templates-panel';
 
@@ -7,9 +7,10 @@ interface HeaderProps {
   onRun: () => void;
   isRunning: boolean;
   onSelectTemplate: (id: string) => void;
+  onClose?: () => void;
 }
 
-export function Header({ onRun, isRunning, onSelectTemplate }: HeaderProps) {
+export function Header({ onRun, isRunning, onSelectTemplate, onClose }: HeaderProps) {
   const [projectName, setProjectName] = React.useState('Untitled Project');
   const [isEditing, setIsEditing] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -24,6 +25,11 @@ export function Header({ onRun, isRunning, onSelectTemplate }: HeaderProps) {
     <header className="absolute top-0 left-0 right-0 h-14 border-b border-border/50 bg-background/80 backdrop-blur-md z-50 flex items-center justify-between px-4">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
+          {onClose && (
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground mr-1" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          )}
           <div className="h-6 w-6 rounded bg-primary flex items-center justify-center">
             <div className="h-2 w-2 rounded-full bg-white" />
           </div>

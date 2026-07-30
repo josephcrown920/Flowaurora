@@ -1,2 +1,25 @@
 export * from "./generated/api";
-export * from "./generated/types";
+// Re-export TS types from generated types (excluding names that clash with Zod schemas above)
+export type {
+  Character,
+  CharacterInput,
+  CharacterUpdate,
+  GenerateCharacterPortraitInput,
+  GenerateShotAngleInput,
+  GenerateShotImageInput,
+  HealthStatus,
+  ListShotsParams,
+  Project,
+  ProjectInput,
+  ProjectStatus,
+  ProjectUpdate,
+  ProjectUpdateStatus,
+  ProposedShot,
+  ProposeShotsInput,
+  Shot,
+  ShotInput,
+  ShotShotType,
+  ShotStatus,
+  ShotUpdate,
+  ShotUpdateStatus,
+} from "./generated/types";
