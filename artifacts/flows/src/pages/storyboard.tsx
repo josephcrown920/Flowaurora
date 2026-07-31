@@ -5,13 +5,16 @@ import {
   useListProjectShots, 
   useCreateShot, 
   useGenerateShotImage,
+  useUpdateShot,
+  useListCharacters,
   getListProjectShotsQueryKey,
   getGetProjectQueryKey
 } from "@workspace/api-client-react";
+import type { Shot, Character } from "@workspace/api-client-react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sparkles, Plus, Image as ImageIcon, Video, MoreHorizontal, Loader2 } from "lucide-react";
+import { ArrowLeft, Sparkles, Plus, Image as ImageIcon, Video, MoreHorizontal, Loader2, Users, Check, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +26,12 @@ import { useForm } from "react-hook-form";
 import { Form, FormField, FormItem, FormLabel, FormControl } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Badge } from "@/components/ui/badge";
 
 // Workaround to ensure proposeShots can be called if the hook export name differs
 const proposeShotsMutationFn = async (data: { logline: string; sceneCount?: number }) => {
@@ -46,6 +55,8 @@ export default function Storyboard() {
   const { data: shots, isLoading: isShotsLoading } = useListProjectShots(projectId, {
     query: { enabled: !!projectId, queryKey: getListProjectShotsQueryKey(projectId) }
   });
+
+  const { data: characters } = useListCharacters();
 
   const createShot = useCreateShot();
   const generateImage = useGenerateShotImage();
@@ -156,79 +167,283 @@ export default function Storyboard() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {shots?.map((shot) => (
-                <div key={shot.id} className="group relative flex flex-col bg-card border border-border rounded-lg overflow-hidden shadow-sm hover:border-primary/40 transition-colors">
-                  
-                  {/* Media Container - 16:9 */}
-                  <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden">
-                    {shot.imageUrl ? (
-                      <img src={shot.imageUrl} alt={shot.prompt} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="text-center flex flex-col items-center">
-                        {shot.status === 'generating' ? (
-                          <>
-                            <Loader2 className="h-6 w-6 text-primary animate-spin mb-2" />
-                            <span className="text-xs text-primary font-medium uppercase tracking-wider">Generating</span>
-                          </>
-                        ) : (
-                          <>
-                            <ImageIcon className="h-8 w-8 text-muted-foreground/30 mb-2" />
-                            <span className="text-xs text-muted-foreground/50 uppercase tracking-wider font-semibold">No Image</span>
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs font-mono font-medium text-white border border-white/10 shadow-sm">
-                      SH {String(shot.position).padStart(2, '0')}
-                    </div>
-                    
-                    <div className="absolute top-2 right-2 flex gap-1">
-                      <div className="bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-[10px] font-bold uppercase text-white/90 border border-white/10">
-                        {shot.shotType.replace('-', ' ')}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Metadata */}
-                  <div className="p-4 flex-1 flex flex-col">
-                    <div className="text-xs font-semibold text-primary mb-1 uppercase tracking-wider">
-                      {shot.cameraAngle}
-                    </div>
-                    <p className="text-sm text-foreground/90 line-clamp-3 mb-4 flex-1">
-                      {shot.prompt}
-                    </p>
-                    
-                    <div className="flex items-center justify-between pt-3 border-t border-border/50">
-                      <div className="flex items-center gap-2">
-                        {shot.status === 'ready' && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
-                        {shot.status === 'generating' && <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />}
-                        {shot.status === 'draft' && <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />}
-                        <span className="text-xs text-muted-foreground capitalize">{shot.status}</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                          onClick={() => handleGenerateImage(shot.id)}
-                          disabled={shot.status === 'generating'}
-                        >
-                          <ImageIcon className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
-                          <MoreHorizontal className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <ShotCard
+                  key={shot.id}
+                  shot={shot}
+                  characters={characters || []}
+                  projectId={projectId}
+                  onGenerateImage={handleGenerateImage}
+                />
               ))}
             </div>
           )}
         </div>
       </main>
     </div>
+  );
+}
+
+function ShotCard({ 
+  shot, 
+  characters, 
+  projectId, 
+  onGenerateImage 
+}: { 
+  shot: Shot; 
+  characters: Character[]; 
+  projectId: number; 
+  onGenerateImage: (id: number) => void;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const updateShot = useUpdateShot();
+
+  const assignedCharacters = characters.filter(c => shot.characterIds?.includes(c.id));
+
+  const handleCharacterToggle = (characterId: number) => {
+    const current = shot.characterIds || [];
+    const next = current.includes(characterId)
+      ? current.filter(id => id !== characterId)
+      : [...current, characterId];
+
+    updateShot.mutate(
+      { id: shot.id, data: { characterIds: next } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListProjectShotsQueryKey(projectId) });
+        }
+      }
+    );
+  };
+
+  return (
+    <div className="group relative flex flex-col bg-card border border-border rounded-lg overflow-hidden shadow-sm hover:border-primary/40 transition-colors">
+      
+      {/* Media Container - 16:9 */}
+      <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden">
+        {shot.imageUrl ? (
+          <img src={shot.imageUrl} alt={shot.prompt} className="w-full h-full object-cover" />
+        ) : (
+          <div className="text-center flex flex-col items-center">
+            {shot.status === 'generating' ? (
+              <>
+                <Loader2 className="h-6 w-6 text-primary animate-spin mb-2" />
+                <span className="text-xs text-primary font-medium uppercase tracking-wider">Generating</span>
+              </>
+            ) : (
+              <>
+                <ImageIcon className="h-8 w-8 text-muted-foreground/30 mb-2" />
+                <span className="text-xs text-muted-foreground/50 uppercase tracking-wider font-semibold">No Image</span>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs font-mono font-medium text-white border border-white/10 shadow-sm">
+          SH {String(shot.position).padStart(2, '0')}
+        </div>
+        
+        <div className="absolute top-2 right-2 flex gap-1">
+          <div className="bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-[10px] font-bold uppercase text-white/90 border border-white/10">
+            {shot.shotType.replace('-', ' ')}
+          </div>
+        </div>
+      </div>
+
+      {/* Metadata */}
+      <div className="p-4 flex-1 flex flex-col">
+        <div className="text-xs font-semibold text-primary mb-1 uppercase tracking-wider">
+          {shot.cameraAngle}
+        </div>
+        <p className="text-sm text-foreground/90 line-clamp-3 mb-3 flex-1">
+          {shot.prompt}
+        </p>
+
+        {/* Character chips */}
+        {assignedCharacters.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-3">
+            {assignedCharacters.map(char => (
+              <span
+                key={char.id}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary/15 text-primary border border-primary/20"
+              >
+                <Users className="h-2.5 w-2.5" />
+                {char.name}
+              </span>
+            ))}
+          </div>
+        )}
+        
+        <div className="flex items-center justify-between pt-3 border-t border-border/50">
+          <div className="flex items-center gap-2">
+            {shot.status === 'ready' && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+            {shot.status === 'generating' && <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />}
+            {shot.status === 'draft' && <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />}
+            <span className="text-xs text-muted-foreground capitalize">{shot.status}</span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
+              onClick={() => onGenerateImage(shot.id)}
+              disabled={shot.status === 'generating'}
+            >
+              <ImageIcon className="h-3.5 w-3.5" />
+            </Button>
+
+            {/* Character picker popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-7 w-7 ${assignedCharacters.length > 0 ? 'text-primary' : 'text-muted-foreground'} hover:text-primary hover:bg-primary/10`}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-2" align="end">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 pb-2">
+                  Cast Characters
+                </p>
+                {characters.length === 0 ? (
+                  <p className="text-xs text-muted-foreground px-2 py-1">
+                    No characters yet. Create some in the Characters tab.
+                  </p>
+                ) : (
+                  <div className="space-y-0.5">
+                    {characters.map(char => {
+                      const assigned = shot.characterIds?.includes(char.id);
+                      return (
+                        <button
+                          key={char.id}
+                          onClick={() => handleCharacterToggle(char.id)}
+                          disabled={updateShot.isPending}
+                          className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left transition-colors ${
+                            assigned 
+                              ? 'bg-primary/15 text-primary' 
+                              : 'hover:bg-muted text-foreground'
+                          }`}
+                        >
+                          <div className={`h-4 w-4 rounded-sm border flex items-center justify-center flex-shrink-0 ${
+                            assigned ? 'bg-primary border-primary' : 'border-border'
+                          }`}>
+                            {assigned && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                          </div>
+                          <span className="truncate">{char.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+
+            <ShotEditDialog shot={shot} projectId={projectId} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShotEditDialog({ shot, projectId }: { shot: Shot; projectId: number }) {
+  const [open, setOpen] = useState(false);
+  const updateShot = useUpdateShot();
+  const queryClient = useQueryClient();
+
+  const form = useForm({
+    defaultValues: {
+      shotType: shot.shotType,
+      cameraAngle: shot.cameraAngle,
+      prompt: shot.prompt,
+    }
+  });
+
+  // Sync form when shot changes
+  useEffect(() => {
+    form.reset({
+      shotType: shot.shotType,
+      cameraAngle: shot.cameraAngle,
+      prompt: shot.prompt,
+    });
+  }, [shot.id]);
+
+  const onSubmit = (data: any) => {
+    updateShot.mutate(
+      { id: shot.id, data },
+      {
+        onSuccess: () => {
+          setOpen(false);
+          queryClient.invalidateQueries({ queryKey: getListProjectShotsQueryKey(projectId) });
+        }
+      }
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="border-border bg-card">
+        <DialogHeader>
+          <DialogTitle>Edit Shot SH {String(shot.position).padStart(2, '0')}</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="shotType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Shot Type</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g. wide, close-up" className="bg-input/50" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="cameraAngle"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Camera Angle</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g. High angle" className="bg-input/50" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="prompt"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Prompt Description</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} placeholder="Describe the scene..." className="min-h-[100px] bg-input/50 resize-none" />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={updateShot.isPending}>
+                {updateShot.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
