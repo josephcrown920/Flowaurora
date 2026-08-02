@@ -1,0 +1,9 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "k-0lsaIGBqVHlBT40_PQC"
+uri = "file://flows-canvas.zip"
+type = "unspecified"
+title = "flows-canvas.zip"
+description = "Drop-in React canvas component — all files, rewritten imports, CSS, and README included."
