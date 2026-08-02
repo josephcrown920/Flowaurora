@@ -80,6 +80,7 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
   if (body.data.logline !== undefined) updates.logline = body.data.logline;
   if (body.data.stylePreset !== undefined) updates.stylePreset = body.data.stylePreset;
   if (body.data.status !== undefined) updates.status = body.data.status;
+  if (body.data.canvasState !== undefined) updates.canvasState = body.data.canvasState;
   const [row] = await db
     .update(projectsTable)
     .set(updates)

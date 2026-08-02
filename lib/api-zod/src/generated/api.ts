@@ -5,7 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import * as zod from 'zod/v4';
+import * as zod from 'zod';
 
 
 /**
@@ -21,7 +21,7 @@ export const HealthCheckResponse = zod.object({
  * @summary List characters
  */
 export const ListCharactersResponseItem = zod.object({
-  "id": zod.int(),
+  "id": zod.number().int(),
   "name": zod.string(),
   "description": zod.string(),
   "wardrobe": zod.string(),
@@ -46,7 +46,7 @@ export const CreateCharacterBody = zod.object({
 })
 
 export const CreateCharacterResponse = zod.object({
-  "id": zod.int(),
+  "id": zod.number().int(),
   "name": zod.string(),
   "description": zod.string(),
   "wardrobe": zod.string(),
@@ -64,7 +64,7 @@ export const GetCharacterParams = zod.object({
 })
 
 export const GetCharacterResponse = zod.object({
-  "id": zod.int(),
+  "id": zod.number().int(),
   "name": zod.string(),
   "description": zod.string(),
   "wardrobe": zod.string(),
@@ -92,7 +92,7 @@ export const UpdateCharacterBody = zod.object({
 })
 
 export const UpdateCharacterResponse = zod.object({
-  "id": zod.int(),
+  "id": zod.number().int(),
   "name": zod.string(),
   "description": zod.string(),
   "wardrobe": zod.string(),
@@ -116,12 +116,13 @@ export const DeleteCharacterResponse = zod.void()
  * @summary List projects
  */
 export const ListProjectsResponseItem = zod.object({
-  "id": zod.int(),
+  "id": zod.number().int(),
   "title": zod.string(),
   "logline": zod.string(),
   "stylePreset": zod.string(),
   "status": zod.enum(['draft', 'storyboarding', 'generating', 'complete']),
-  "shotCount": zod.int(),
+  "shotCount": zod.number().int(),
+  "canvasState": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -141,12 +142,13 @@ export const CreateProjectBody = zod.object({
 })
 
 export const CreateProjectResponse = zod.object({
-  "id": zod.int(),
+  "id": zod.number().int(),
   "title": zod.string(),
   "logline": zod.string(),
   "stylePreset": zod.string(),
   "status": zod.enum(['draft', 'storyboarding', 'generating', 'complete']),
-  "shotCount": zod.int(),
+  "shotCount": zod.number().int(),
+  "canvasState": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -160,12 +162,13 @@ export const GetProjectParams = zod.object({
 })
 
 export const GetProjectResponse = zod.object({
-  "id": zod.int(),
+  "id": zod.number().int(),
   "title": zod.string(),
   "logline": zod.string(),
   "stylePreset": zod.string(),
   "status": zod.enum(['draft', 'storyboarding', 'generating', 'complete']),
-  "shotCount": zod.int(),
+  "shotCount": zod.number().int(),
+  "canvasState": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -185,16 +188,18 @@ export const UpdateProjectBody = zod.object({
   "title": zod.string().min(1).optional(),
   "logline": zod.string().optional(),
   "stylePreset": zod.string().optional(),
-  "status": zod.enum(['draft', 'storyboarding', 'generating', 'complete']).optional()
+  "status": zod.enum(['draft', 'storyboarding', 'generating', 'complete']).optional(),
+  "canvasState": zod.string().nullish()
 })
 
 export const UpdateProjectResponse = zod.object({
-  "id": zod.int(),
+  "id": zod.number().int(),
   "title": zod.string(),
   "logline": zod.string(),
   "stylePreset": zod.string(),
   "status": zod.enum(['draft', 'storyboarding', 'generating', 'complete']),
-  "shotCount": zod.int(),
+  "shotCount": zod.number().int(),
+  "canvasState": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -218,9 +223,9 @@ export const ListProjectShotsParams = zod.object({
 })
 
 export const ListProjectShotsResponseItem = zod.object({
-  "id": zod.int(),
-  "projectId": zod.int(),
-  "position": zod.int(),
+  "id": zod.number().int(),
+  "projectId": zod.number().int(),
+  "position": zod.number().int(),
   "shotType": zod.enum(['wide', 'medium', 'close-up', 'extreme-close-up', 'over-the-shoulder', 'aerial']),
   "cameraAngle": zod.string(),
   "prompt": zod.string(),
@@ -228,8 +233,8 @@ export const ListProjectShotsResponseItem = zod.object({
   "videoUrl": zod.string().nullable(),
   "colorGrade": zod.string(),
   "status": zod.enum(['draft', 'generating', 'ready']),
-  "parentShotId": zod.int().nullable(),
-  "characterIds": zod.array(zod.int()),
+  "parentShotId": zod.number().int().nullable(),
+  "characterIds": zod.array(zod.number().int()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -247,14 +252,14 @@ export const CreateShotBody = zod.object({
   "shotType": zod.string().optional(),
   "cameraAngle": zod.string().optional(),
   "prompt": zod.string().optional(),
-  "position": zod.int().optional(),
-  "characterIds": zod.array(zod.int()).optional()
+  "position": zod.number().int().optional(),
+  "characterIds": zod.array(zod.number().int()).optional()
 })
 
 export const CreateShotResponse = zod.object({
-  "id": zod.int(),
-  "projectId": zod.int(),
-  "position": zod.int(),
+  "id": zod.number().int(),
+  "projectId": zod.number().int(),
+  "position": zod.number().int(),
   "shotType": zod.enum(['wide', 'medium', 'close-up', 'extreme-close-up', 'over-the-shoulder', 'aerial']),
   "cameraAngle": zod.string(),
   "prompt": zod.string(),
@@ -262,8 +267,8 @@ export const CreateShotResponse = zod.object({
   "videoUrl": zod.string().nullable(),
   "colorGrade": zod.string(),
   "status": zod.enum(['draft', 'generating', 'ready']),
-  "parentShotId": zod.int().nullable(),
-  "characterIds": zod.array(zod.int()),
+  "parentShotId": zod.number().int().nullable(),
+  "characterIds": zod.array(zod.number().int()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -279,9 +284,9 @@ export const ListShotsQueryParams = zod.object({
 })
 
 export const ListShotsResponseItem = zod.object({
-  "id": zod.int(),
-  "projectId": zod.int(),
-  "position": zod.int(),
+  "id": zod.number().int(),
+  "projectId": zod.number().int(),
+  "position": zod.number().int(),
   "shotType": zod.enum(['wide', 'medium', 'close-up', 'extreme-close-up', 'over-the-shoulder', 'aerial']),
   "cameraAngle": zod.string(),
   "prompt": zod.string(),
@@ -289,8 +294,8 @@ export const ListShotsResponseItem = zod.object({
   "videoUrl": zod.string().nullable(),
   "colorGrade": zod.string(),
   "status": zod.enum(['draft', 'generating', 'ready']),
-  "parentShotId": zod.int().nullable(),
-  "characterIds": zod.array(zod.int()),
+  "parentShotId": zod.number().int().nullable(),
+  "characterIds": zod.array(zod.number().int()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -305,9 +310,9 @@ export const GetShotParams = zod.object({
 })
 
 export const GetShotResponse = zod.object({
-  "id": zod.int(),
-  "projectId": zod.int(),
-  "position": zod.int(),
+  "id": zod.number().int(),
+  "projectId": zod.number().int(),
+  "position": zod.number().int(),
   "shotType": zod.enum(['wide', 'medium', 'close-up', 'extreme-close-up', 'over-the-shoulder', 'aerial']),
   "cameraAngle": zod.string(),
   "prompt": zod.string(),
@@ -315,8 +320,8 @@ export const GetShotResponse = zod.object({
   "videoUrl": zod.string().nullable(),
   "colorGrade": zod.string(),
   "status": zod.enum(['draft', 'generating', 'ready']),
-  "parentShotId": zod.int().nullable(),
-  "characterIds": zod.array(zod.int()),
+  "parentShotId": zod.number().int().nullable(),
+  "characterIds": zod.array(zod.number().int()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -337,14 +342,14 @@ export const UpdateShotBody = zod.object({
   "videoUrl": zod.string().nullish(),
   "colorGrade": zod.string().optional(),
   "status": zod.enum(['draft', 'generating', 'ready']).optional(),
-  "position": zod.int().optional(),
-  "characterIds": zod.array(zod.int()).optional()
+  "position": zod.number().int().optional(),
+  "characterIds": zod.array(zod.number().int()).optional()
 })
 
 export const UpdateShotResponse = zod.object({
-  "id": zod.int(),
-  "projectId": zod.int(),
-  "position": zod.int(),
+  "id": zod.number().int(),
+  "projectId": zod.number().int(),
+  "position": zod.number().int(),
   "shotType": zod.enum(['wide', 'medium', 'close-up', 'extreme-close-up', 'over-the-shoulder', 'aerial']),
   "cameraAngle": zod.string(),
   "prompt": zod.string(),
@@ -352,8 +357,8 @@ export const UpdateShotResponse = zod.object({
   "videoUrl": zod.string().nullable(),
   "colorGrade": zod.string(),
   "status": zod.enum(['draft', 'generating', 'ready']),
-  "parentShotId": zod.int().nullable(),
-  "characterIds": zod.array(zod.int()),
+  "parentShotId": zod.number().int().nullable(),
+  "characterIds": zod.array(zod.number().int()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -381,8 +386,8 @@ export const proposeShotsBodySceneCountMax = 12;
 export const ProposeShotsBody = zod.object({
   "logline": zod.string().min(1),
   "stylePreset": zod.string().optional(),
-  "sceneCount": zod.int().min(1).max(proposeShotsBodySceneCountMax).optional(),
-  "characterIds": zod.array(zod.int()).optional()
+  "sceneCount": zod.number().int().min(1).max(proposeShotsBodySceneCountMax).optional(),
+  "characterIds": zod.array(zod.number().int()).optional()
 })
 
 export const ProposeShotsResponse = zod.object({
@@ -400,11 +405,11 @@ export const ProposeShotsResponse = zod.object({
  * @summary Generate a reference portrait for a character
  */
 export const GenerateCharacterPortraitBody = zod.object({
-  "characterId": zod.int()
+  "characterId": zod.number().int()
 })
 
 export const GenerateCharacterPortraitResponse = zod.object({
-  "id": zod.int(),
+  "id": zod.number().int(),
   "name": zod.string(),
   "description": zod.string(),
   "wardrobe": zod.string(),
@@ -419,13 +424,13 @@ export const GenerateCharacterPortraitResponse = zod.object({
  * @summary Generate an image for a shot, grounded in its assigned characters
  */
 export const GenerateShotImageBody = zod.object({
-  "shotId": zod.int()
+  "shotId": zod.number().int()
 })
 
 export const GenerateShotImageResponse = zod.object({
-  "id": zod.int(),
-  "projectId": zod.int(),
-  "position": zod.int(),
+  "id": zod.number().int(),
+  "projectId": zod.number().int(),
+  "position": zod.number().int(),
   "shotType": zod.enum(['wide', 'medium', 'close-up', 'extreme-close-up', 'over-the-shoulder', 'aerial']),
   "cameraAngle": zod.string(),
   "prompt": zod.string(),
@@ -433,8 +438,8 @@ export const GenerateShotImageResponse = zod.object({
   "videoUrl": zod.string().nullable(),
   "colorGrade": zod.string(),
   "status": zod.enum(['draft', 'generating', 'ready']),
-  "parentShotId": zod.int().nullable(),
-  "characterIds": zod.array(zod.int()),
+  "parentShotId": zod.number().int().nullable(),
+  "characterIds": zod.array(zod.number().int()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -448,14 +453,14 @@ export const GenerateShotImageResponse = zod.object({
 
 
 export const GenerateShotAngleBody = zod.object({
-  "shotId": zod.int(),
+  "shotId": zod.number().int(),
   "angleLabel": zod.string().min(1)
 })
 
 export const GenerateShotAngleResponse = zod.object({
-  "id": zod.int(),
-  "projectId": zod.int(),
-  "position": zod.int(),
+  "id": zod.number().int(),
+  "projectId": zod.number().int(),
+  "position": zod.number().int(),
   "shotType": zod.enum(['wide', 'medium', 'close-up', 'extreme-close-up', 'over-the-shoulder', 'aerial']),
   "cameraAngle": zod.string(),
   "prompt": zod.string(),
@@ -463,8 +468,8 @@ export const GenerateShotAngleResponse = zod.object({
   "videoUrl": zod.string().nullable(),
   "colorGrade": zod.string(),
   "status": zod.enum(['draft', 'generating', 'ready']),
-  "parentShotId": zod.int().nullable(),
-  "characterIds": zod.array(zod.int()),
+  "parentShotId": zod.number().int().nullable(),
+  "characterIds": zod.array(zod.number().int()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })

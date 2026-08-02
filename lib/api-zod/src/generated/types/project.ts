@@ -14,6 +14,8 @@ export interface Project {
   stylePreset: string;
   status: ProjectStatus;
   shotCount: number;
+  /** @nullable */
+  canvasState?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -500,6 +500,7 @@ components:
         stylePreset: { type: string }
         status: { type: string, enum: [draft, storyboarding, generating, complete] }
         shotCount: { type: integer }
+        canvasState: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     ProjectInput:
@@ -516,6 +517,7 @@ components:
         logline: { type: string }
         stylePreset: { type: string }
         status: { type: string, enum: [draft, storyboarding, generating, complete] }
+        canvasState: { type: ["string", "null"] }
 
     Shot:
       type: object

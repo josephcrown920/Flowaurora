@@ -55,6 +55,8 @@ export interface Project {
   stylePreset: string;
   status: ProjectStatus;
   shotCount: number;
+  /** @nullable */
+  canvasState?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -82,6 +84,8 @@ export interface ProjectUpdate {
   logline?: string;
   stylePreset?: string;
   status?: ProjectUpdateStatus;
+  /** @nullable */
+  canvasState?: string | null;
 }
 
 export type ShotShotType = typeof ShotShotType[keyof typeof ShotShotType];

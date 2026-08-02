@@ -13,4 +13,6 @@ export interface ProjectUpdate {
   logline?: string;
   stylePreset?: string;
   status?: ProjectUpdateStatus;
+  /** @nullable */
+  canvasState?: string | null;
 }

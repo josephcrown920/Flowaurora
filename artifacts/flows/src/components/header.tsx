@@ -8,11 +8,16 @@ interface HeaderProps {
   isRunning: boolean;
   onSelectTemplate: (id: string) => void;
   onClose?: () => void;
+  projectName?: string;
 }
 
-export function Header({ onRun, isRunning, onSelectTemplate, onClose }: HeaderProps) {
-  const [projectName, setProjectName] = React.useState('Untitled Project');
+export function Header({ onRun, isRunning, onSelectTemplate, onClose, projectName: initialProjectName }: HeaderProps) {
+  const [projectName, setProjectName] = React.useState(initialProjectName ?? 'Untitled Project');
   const [isEditing, setIsEditing] = React.useState(false);
+
+  React.useEffect(() => {
+    if (initialProjectName) setProjectName(initialProjectName);
+  }, [initialProjectName]);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {

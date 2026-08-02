@@ -8,6 +8,7 @@ export const projectsTable = pgTable("projects", {
   logline: text("logline").notNull().default(""),
   stylePreset: text("style_preset").notNull().default("cinematic"),
   status: text("status").notNull().default("draft"),
+  canvasState: text("canvas_state"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
