@@ -23,12 +23,7 @@ import { TEMPLATE_LAYOUTS } from '@/components/templates';
 const initialNodes = TEMPLATE_LAYOUTS['1'].nodes;
 const initialEdges = TEMPLATE_LAYOUTS['1'].edges;
 
-interface CanvasEditorProps {
-  projectId: number;
-  onClose: () => void;
-}
-
-function CanvasEditorInner({ projectId, onClose }: CanvasEditorProps) {
+function CanvasEditorInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [activeTool, setActiveTool] = useState<'select' | 'pan' | 'cut'>('select');
@@ -46,7 +41,6 @@ function CanvasEditorInner({ projectId, onClose }: CanvasEditorProps) {
       x: window.innerWidth / 2,
       y: window.innerHeight / 2
     });
-    
     const newNode = {
       id: `${type}-${Date.now()}`,
       type,
@@ -70,17 +64,16 @@ function CanvasEditorInner({ projectId, onClose }: CanvasEditorProps) {
   };
 
   return (
-    <div 
+    <div
       className="w-full h-[100dvh] bg-background overflow-hidden relative font-sans text-foreground"
       data-running={isRunning}
     >
-      <Header 
-        onRun={handleRun} 
-        isRunning={isRunning} 
-        onSelectTemplate={handleSelectTemplate} 
-        onClose={onClose}
+      <Header
+        onRun={handleRun}
+        isRunning={isRunning}
+        onSelectTemplate={handleSelectTemplate}
       />
-      
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -98,23 +91,23 @@ function CanvasEditorInner({ projectId, onClose }: CanvasEditorProps) {
         maxZoom={4}
       >
         {showGrid && (
-          <Background 
-            variant={BackgroundVariant.Dots} 
-            gap={24} 
-            size={2} 
-            color="hsl(var(--muted-foreground)/0.3)" 
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={24}
+            size={2}
+            color="hsl(var(--muted-foreground)/0.3)"
           />
         )}
-        <Controls 
-          position="bottom-right" 
+        <Controls
+          position="bottom-right"
           className="bg-card border-border shadow-lg !mb-20"
           showInteractive={false}
         />
       </ReactFlow>
 
-      <Toolbar 
-        onAddNode={onAddNode} 
-        activeTool={activeTool} 
+      <Toolbar
+        onAddNode={onAddNode}
+        activeTool={activeTool}
         setActiveTool={setActiveTool}
         showGrid={showGrid}
         setShowGrid={setShowGrid}
@@ -123,10 +116,10 @@ function CanvasEditorInner({ projectId, onClose }: CanvasEditorProps) {
   );
 }
 
-export function CanvasEditor(props: CanvasEditorProps) {
+export function CanvasEditor() {
   return (
     <ReactFlowProvider>
-      <CanvasEditorInner {...props} />
+      <CanvasEditorInner />
     </ReactFlowProvider>
   );
 }

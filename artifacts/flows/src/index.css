@@ -66,7 +66,6 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* Base values - Cinematic Dark */
 :root {
   --button-outline: rgba(255, 255, 255, 0.1);
   --badge-outline: rgba(255, 255, 255, 0.05);
@@ -76,60 +75,56 @@
   --elevate-1: rgba(255, 255, 255, 0.04);
   --elevate-2: rgba(255, 255, 255, 0.09);
 
-  /* Deep space/charcoal background */
-  --background: 240 10% 4%;
-  --foreground: 0 0% 95%;
-  --border: 240 10% 12%;
-  
-  --card: 240 10% 6%;
-  --card-foreground: 0 0% 95%;
-  --card-border: 240 10% 12%;
-  
-  --sidebar: 240 10% 5%;
-  --sidebar-foreground: 0 0% 95%;
-  --sidebar-border: 240 10% 12%;
-  
-  /* Amber/Gold cinematic accent */
-  --sidebar-primary: 38 92% 50%;
-  --sidebar-primary-foreground: 0 0% 0%;
-  
-  --sidebar-accent: 240 10% 10%;
-  --sidebar-accent-foreground: 0 0% 95%;
-  --sidebar-ring: 38 92% 50%;
-  
-  --popover: 240 10% 6%;
-  --popover-foreground: 0 0% 95%;
-  --popover-border: 240 10% 12%;
-  
-  --primary: 38 92% 50%;
-  --primary-foreground: 0 0% 0%;
-  
-  --secondary: 240 10% 12%;
-  --secondary-foreground: 0 0% 95%;
-  
-  --muted: 240 10% 12%;
-  --muted-foreground: 240 5% 65%;
-  
-  --accent: 240 10% 14%;
-  --accent-foreground: 0 0% 95%;
-  
+  --background: 224 14% 8%;
+  --foreground: 220 14% 92%;
+  --border: 224 14% 16%;
+
+  --card: 224 14% 11%;
+  --card-foreground: 220 14% 92%;
+  --card-border: 224 14% 16%;
+
+  --sidebar: 224 14% 9%;
+  --sidebar-foreground: 220 14% 92%;
+  --sidebar-border: 224 14% 16%;
+  --sidebar-primary: 234 89% 64%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 224 14% 14%;
+  --sidebar-accent-foreground: 220 14% 92%;
+  --sidebar-ring: 234 89% 64%;
+
+  --popover: 224 14% 11%;
+  --popover-foreground: 220 14% 92%;
+  --popover-border: 224 14% 16%;
+
+  --primary: 234 89% 64%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 224 14% 16%;
+  --secondary-foreground: 220 14% 92%;
+
+  --muted: 224 14% 14%;
+  --muted-foreground: 220 10% 55%;
+
+  --accent: 224 14% 16%;
+  --accent-foreground: 220 14% 92%;
+
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
-  
-  --input: 240 10% 15%;
-  --ring: 38 92% 50%;
-  
-  --chart-1: 38 92% 50%;
-  --chart-2: 240 10% 40%;
-  --chart-3: 240 10% 30%;
-  --chart-4: 240 10% 20%;
-  --chart-5: 240 10% 10%;
+
+  --input: 224 14% 16%;
+  --ring: 234 89% 64%;
+
+  --chart-1: 234 89% 64%;
+  --chart-2: 271 81% 66%;
+  --chart-3: 196 80% 55%;
+  --chart-4: 224 14% 40%;
+  --chart-5: 224 14% 25%;
 
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: Menlo, monospace;
   --radius: 0.5rem;
-  
+
   --shadow-2xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.5);
   --shadow-xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.5);
   --shadow-sm:
@@ -156,10 +151,6 @@
   --muted-border: hsl(var(--muted));
   --accent-border: hsl(var(--accent));
   --destructive-border: hsl(var(--destructive));
-}
-
-.dark {
-  /* Inherit all cinematic dark colors from :root */
 }
 
 @layer base {
