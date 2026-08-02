@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, charactersTable } from "@workspace/db";
 import { inArray } from "drizzle-orm";
 import { ProposeShotsBody, ProposeShotsResponse } from "@workspace/api-zod";
+import { anthropic } from "@workspace/integrations-anthropic-ai";
 
 const router: IRouter = Router();
 
@@ -76,6 +77,98 @@ Respond ONLY with a valid JSON object: { "shots": [ { "shotType": "...", "camera
     res.json(ProposeShotsResponse.parse(parsed_shots));
   } catch (err: any) {
     req.log.error({ err }, "AI propose-shots failed");
+    res.status(503).json({ error: "AI provider unavailable" });
+  }
+});
+
+// ── Director Orchestrate ─────────────────────────────────────────────────────
+// Takes a plain-English description and returns React Flow nodes + edges.
+
+const ORCHESTRATE_SYSTEM = `You are a visual AI workflow architect for a video/image generation tool called Flows.
+Users describe what they want to create and you design the optimal node-based workflow.
+
+AVAILABLE NODE TYPES (use exact type name):
+Inputs:
+  - PromptNode       : text prompt input
+  - PromptBuilderNode: dynamic prompt with variables
+  - TextIteratorNode : iterate through multiple text prompts
+  - ImageUploadNode  : provide a reference image
+  - VideoUploadNode  : provide a reference video
+  - AudioUploadNode  : provide audio
+  - ImageIteratorNode: iterate through multiple images
+
+Directors:
+  - DirectorNode     : AI script director — breaks a logline into scene prompts
+  - CharacterNode    : character reference for visual consistency
+
+AI Models:
+  - ImageGenNode     : image generation (FLUX, SDXL, Ideogram)
+  - LTXProNode       : LTX-2.3 Pro — image+prompt → video
+  - NanoBananaProNode: high-quality video generation
+  - AudioToVideoNode : audio-driven video generation
+
+Post-processing:
+  - RemoveBackgroundNode: remove background from image
+  - TopazUpscaleNode    : upscale image or video
+  - VideoExtendNode     : extend video length
+  - ExtractFrameNode    : extract frame from video
+  - DubbingNode         : dub video to another language
+
+LAYOUT RULES:
+- Arrange nodes left-to-right in flow order
+- Horizontal spacing: ~360px between connected nodes
+- Vertical spacing: ~220px between parallel branches
+- Start first node at x:100, centre the group around y:300
+- Use 3–7 nodes for most workflows; only go larger for explicit batch workflows
+
+OUTPUT FORMAT (return ONLY valid JSON, no markdown fences):
+{
+  "explanation": "One sentence describing the workflow",
+  "nodes": [
+    { "id": "n1", "type": "NodeTypeName", "position": { "x": 100, "y": 300 }, "data": {} }
+  ],
+  "edges": [
+    { "id": "e1", "source": "n1", "target": "n2", "animated": true }
+  ]
+}`;
+
+router.post("/director/orchestrate", async (req, res): Promise<void> => {
+  const { description } = req.body as { description?: string };
+  if (!description || typeof description !== "string" || !description.trim()) {
+    res.status(400).json({ error: "description is required" });
+    return;
+  }
+
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2048,
+      system: ORCHESTRATE_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: `Design a workflow for: ${description.trim()}`,
+        },
+      ],
+    });
+
+    const raw = message.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b as { type: "text"; text: string }).text)
+      .join("");
+
+    let workflow: unknown;
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      workflow = JSON.parse(jsonMatch?.[0] ?? raw);
+    } catch {
+      res.status(500).json({ error: "AI returned invalid JSON" });
+      return;
+    }
+
+    res.json(workflow);
+  } catch (err: any) {
+    req.log.error({ err }, "director/orchestrate failed");
     res.status(503).json({ error: "AI provider unavailable" });
   }
 });

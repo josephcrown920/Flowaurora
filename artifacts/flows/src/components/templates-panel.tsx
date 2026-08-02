@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { LayoutTemplate, Search, Clapperboard, UserCircle2, Aperture } from 'lucide-react';
+import { LayoutTemplate, Search, Clapperboard, UserCircle2, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -42,42 +42,30 @@ const TEMPLATES: Template[] = [
 
 const FILTERS = ['All', 'Director', 'Character', 'Image', 'Video', 'Batch', 'Campaign', 'Dubbing'];
 
-// Color coding for different node types in the mini preview
-const NODE_COLORS: Record<string, string> = {
-  DirectorNode: '#f97316',       // orange
-  CharacterNode: '#10b981',      // emerald
-  ImageGenNode: '#38bdf8',       // sky
-  LTXProNode: '#a855f7',         // purple
-  NanoBananaProNode: '#eab308',  // yellow
-  AudioToVideoNode: '#a855f7',   // purple
-  PromptNode: '#6366f1',         // indigo
-  PromptBuilderNode: '#6366f1',  // indigo
-  TextIteratorNode: '#64748b',   // slate
-  ImageUploadNode: '#3b82f6',    // blue
-  VideoUploadNode: '#3b82f6',    // blue
-  AudioUploadNode: '#3b82f6',    // blue
-  ImageIteratorNode: '#3b82f6',  // blue
-  RemoveBackgroundNode: '#6b7280', // gray
-  TopazUpscaleNode: '#6b7280',   // gray
-  VideoExtendNode: '#6b7280',    // gray
-  ExtractFrameNode: '#6b7280',   // gray
-  DubbingNode: '#6b7280',        // gray
+const NODE_COLORS: Record<string, { bg: string, text: string, border: string }> = {
+  DirectorNode: { bg: 'bg-orange-500/15', text: 'text-orange-400', border: 'border-orange-500/30' },
+  CharacterNode: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30' },
+  ImageGenNode: { bg: 'bg-sky-500/15', text: 'text-sky-400', border: 'border-sky-500/30' },
+  LTXProNode: { bg: 'bg-purple-500/15', text: 'text-purple-400', border: 'border-purple-500/30' },
+  NanoBananaProNode: { bg: 'bg-yellow-500/15', text: 'text-yellow-400', border: 'border-yellow-500/30' },
+  PromptNode: { bg: 'bg-indigo-500/15', text: 'text-indigo-400', border: 'border-indigo-500/30' },
+  PromptBuilderNode: { bg: 'bg-indigo-500/15', text: 'text-indigo-400', border: 'border-indigo-500/30' },
+  default: { bg: 'bg-slate-500/15', text: 'text-slate-400', border: 'border-slate-500/30' },
 };
 
 const NODE_LABELS: Record<string, string> = {
   DirectorNode: 'Director',
   CharacterNode: 'Character',
   ImageGenNode: 'Image Gen',
-  LTXProNode: 'LTX-2.3',
-  NanoBananaProNode: 'NanaBanana',
-  AudioToVideoNode: 'A→V',
+  LTXProNode: 'LTX',
+  NanoBananaProNode: 'Video',
   PromptNode: 'Prompt',
   PromptBuilderNode: 'Builder',
-  TextIteratorNode: 'Texts',
   ImageUploadNode: 'Image',
   VideoUploadNode: 'Video',
   AudioUploadNode: 'Audio',
-  ImageIteratorNode: 'Imgs',
+  ImageIteratorNode: 'Images',
+  TextIteratorNode: 'Texts',
   RemoveBackgroundNode: 'Rmbg',
   TopazUpscaleNode: 'Upscale',
   VideoExtendNode: 'Extend',
@@ -85,113 +73,51 @@ const NODE_LABELS: Record<string, string> = {
   DubbingNode: 'Dub',
 };
 
-function FlowPreview({ templateId }: { templateId: string }) {
-  const template = TEMPLATE_LAYOUTS[templateId];
-  if (!template) return null;
+function VisualFlowPreview({ template }: { template: Template }) {
+  const layout = TEMPLATE_LAYOUTS[template.id];
+  if (!layout) return null;
 
-  const { nodes, edges } = template;
+  const sortedNodes = [...layout.nodes].sort((a, b) => a.position.x - b.position.x);
+  const displayNodes = sortedNodes.slice(0, 4);
+  const remaining = sortedNodes.length - 4;
 
-  // Compute bounding box of all node positions
-  const xs = nodes.map(n => n.position.x);
-  const ys = nodes.map(n => n.position.y);
-  const minX = Math.min(...xs);
-  const minY = Math.min(...ys);
-  const maxX = Math.max(...xs) + 80; // approx node width
-  const maxY = Math.max(...ys) + 40; // approx node height
-
-  const rawW = maxX - minX || 1;
-  const rawH = maxY - minY || 1;
-
-  // Target canvas
-  const W = 390;
-  const H = 90;
-  const PAD = 10;
-
-  const scale = Math.min((W - PAD * 2) / rawW, (H - PAD * 2) / rawH);
-  const offsetX = PAD + ((W - PAD * 2) - rawW * scale) / 2;
-  const offsetY = PAD + ((H - PAD * 2) - rawH * scale) / 2;
-
-  const nodeW = Math.max(28, Math.min(48, 60 * scale));
-  const nodeH = Math.max(14, Math.min(22, 24 * scale));
-  const rx = 3;
-
-  // Map nodeId → screen center
-  const nodeCenters: Record<string, { x: number; y: number }> = {};
-  nodes.forEach(n => {
-    nodeCenters[n.id] = {
-      x: offsetX + (n.position.x - minX) * scale + nodeW / 2,
-      y: offsetY + (n.position.y - minY) * scale + nodeH / 2,
-    };
-  });
+  const gradient = (() => {
+    if (template.tags.includes('VIDEO')) return 'from-purple-950/60 to-blue-950/60 border-purple-500/20';
+    if (template.tags.includes('IMAGE')) return 'from-sky-950/60 to-indigo-950/60 border-sky-500/20';
+    if (template.tags.includes('DIRECTOR') || template.tags.includes('CHARACTER')) return 'from-orange-950/60 to-emerald-950/60 border-orange-500/20';
+    if (template.tags.includes('BATCH')) return 'from-slate-900/80 to-slate-800/60 border-slate-500/20';
+    if (template.tags.includes('DUBBING')) return 'from-violet-950/60 to-pink-950/60 border-pink-500/20';
+    return 'from-muted/40 to-muted/20 border-border/50';
+  })();
 
   return (
-    <svg
-      width={W}
-      height={H}
-      viewBox={`0 0 ${W} ${H}`}
-      className="w-full h-full"
-      style={{ display: 'block' }}
-    >
-      <defs>
-        <marker id={`arr-${templateId}`} markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
-          <path d="M0,0 L5,2.5 L0,5 Z" fill="rgba(148,163,184,0.5)" />
-        </marker>
-      </defs>
-
-      {/* Edges */}
-      {edges.map(edge => {
-        const src = nodeCenters[edge.source];
-        const tgt = nodeCenters[edge.target];
-        if (!src || !tgt) return null;
-        const mx = (src.x + tgt.x) / 2;
+    <div className={cn("h-full w-full bg-gradient-to-r flex items-center px-4 gap-1.5 overflow-hidden", gradient)}>
+      {displayNodes.map((n, i) => {
+        const type = n.type as string;
+        const color = NODE_COLORS[type] || NODE_COLORS.default;
+        const label = NODE_LABELS[type] || type.replace('Node', '');
         return (
-          <path
-            key={edge.id}
-            d={`M${src.x},${src.y} C${mx},${src.y} ${mx},${tgt.y} ${tgt.x},${tgt.y}`}
-            stroke="rgba(148,163,184,0.35)"
-            strokeWidth="1"
-            fill="none"
-            markerEnd={`url(#arr-${templateId})`}
-          />
+          <React.Fragment key={n.id}>
+            {i > 0 && <ArrowRight className="h-3 w-3 text-white/30 shrink-0" />}
+            <div className={cn(
+              "px-2 py-1 rounded-full border text-[10px] font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 shadow-sm backdrop-blur-sm",
+              color.bg, color.text, color.border
+            )}>
+              <div className={cn("h-1.5 w-1.5 rounded-full", color.bg.replace('/15', '/80').replace('/20', '/80'))} style={{ backgroundColor: 'currentColor' }} />
+              {label}
+            </div>
+          </React.Fragment>
         );
       })}
-
-      {/* Nodes */}
-      {nodes.map(n => {
-        const cx = offsetX + (n.position.x - minX) * scale;
-        const cy = offsetY + (n.position.y - minY) * scale;
-        const color = NODE_COLORS[n.type as string] || '#6b7280';
-        const label = NODE_LABELS[n.type as string] || n.type || '';
-        const fontSize = Math.max(6, Math.min(8, nodeH * 0.45));
-
-        return (
-          <g key={n.id}>
-            <rect
-              x={cx}
-              y={cy}
-              width={nodeW}
-              height={nodeH}
-              rx={rx}
-              fill={color + '22'}
-              stroke={color + 'cc'}
-              strokeWidth="1"
-            />
-            <text
-              x={cx + nodeW / 2}
-              y={cy + nodeH / 2 + fontSize * 0.36}
-              textAnchor="middle"
-              fontSize={fontSize}
-              fill={color}
-              fontFamily="system-ui, sans-serif"
-              fontWeight="600"
-              style={{ userSelect: 'none' }}
-            >
-              {label.length > 7 ? label.slice(0, 6) + '…' : label}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+      {remaining > 0 && (
+        <>
+          <ArrowRight className="h-3 w-3 text-white/30 shrink-0" />
+          <div className="px-2 py-1 rounded-full border border-white/10 bg-white/5 text-white/50 text-[10px] font-semibold shrink-0 backdrop-blur-sm">
+            +{remaining}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -265,7 +191,7 @@ export function TemplatesPanel({ onSelectTemplate }: TemplatesPanelProps) {
         </div>
 
         <ScrollArea className="flex-1 p-4">
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4 pb-12">
             {filteredTemplates.map(template => {
               const isSelected = selectedId === template.id;
               const isNewTemplate = isNew(template.id);
@@ -274,51 +200,54 @@ export function TemplatesPanel({ onSelectTemplate }: TemplatesPanelProps) {
                   key={template.id}
                   onClick={() => setSelectedId(template.id)}
                   className={cn(
-                    "rounded-xl border p-3 transition-all cursor-pointer",
-                    isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border/50 bg-card hover:border-border hover:bg-muted/10",
+                    "rounded-xl border overflow-hidden transition-all cursor-pointer group",
+                    isSelected ? "border-primary shadow-[0_0_15px_rgba(var(--primary),0.2)]" : "border-border/50 bg-card hover:border-border hover:bg-muted/10",
                     isNewTemplate && !isSelected && "border-orange-500/20 bg-orange-500/5 hover:border-orange-500/30"
                   )}
                 >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-sm leading-tight">{template.title}</h3>
-                      {isNewTemplate && (
-                        <span className="text-[9px] font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
-                          New
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex gap-1 shrink-0">
-                      {template.tags.slice(0, 2).map(tag => (
-                        <span key={tag} className={cn("text-[9px] font-medium px-1.5 py-0.5 rounded", TAG_COLORS[tag] || "bg-muted text-muted-foreground")}>
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-                    {template.description}
-                  </p>
-                  
                   {/* Visual flow diagram */}
                   <div className={cn(
-                    "h-[90px] w-full rounded-lg border overflow-hidden mb-3",
-                    isNewTemplate ? "border-orange-500/20 bg-background/60" : "border-border/40 bg-background/40"
+                    "h-[80px] w-full border-b transition-transform duration-500 origin-bottom",
+                    isSelected ? "border-primary/20 scale-105" : "border-border/40 group-hover:scale-[1.02]",
+                    isNewTemplate && !isSelected ? "border-orange-500/20" : ""
                   )}>
-                    <FlowPreview templateId={template.id} />
+                    <VisualFlowPreview template={template} />
                   </div>
 
-                  {isSelected && (
-                    <div className="flex items-center gap-2 pt-1">
-                      <Button size="sm" className="w-full text-xs h-8" onClick={(e) => {
-                        e.stopPropagation();
-                        onSelectTemplate(template.id);
-                        setOpen(false);
-                      }}>
-                        Use Template
-                      </Button>
+                  <div className="p-3 bg-card relative z-10">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-sm leading-tight">{template.title}</h3>
+                        {isNewTemplate && (
+                          <span className="text-[9px] font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                            New
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        {template.tags.slice(0, 2).map(tag => (
+                          <span key={tag} className={cn("text-[9px] font-medium px-1.5 py-0.5 rounded", TAG_COLORS[tag] || "bg-muted text-muted-foreground")}>
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  )}
+                    <p className="text-xs text-muted-foreground mb-1 leading-relaxed truncate">
+                      {template.description}
+                    </p>
+
+                    {isSelected && (
+                      <div className="flex items-center gap-2 pt-3 animate-in fade-in slide-in-from-top-1 duration-300">
+                        <Button size="sm" className="w-full text-xs h-8" onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectTemplate(template.id);
+                          setOpen(false);
+                        }}>
+                          Use Template
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}

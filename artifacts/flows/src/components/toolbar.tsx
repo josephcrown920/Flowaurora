@@ -29,6 +29,7 @@ interface ToolbarProps {
   setActiveTool: (tool: 'select' | 'pan' | 'cut') => void;
   showGrid: boolean;
   setShowGrid: (val: boolean) => void;
+  onOpenAgent: () => void;
 }
 
 const nodeCategories = [
@@ -72,7 +73,7 @@ const nodeCategories = [
   }
 ];
 
-export function Toolbar({ onAddNode, activeTool, setActiveTool, showGrid, setShowGrid }: ToolbarProps) {
+export function Toolbar({ onAddNode, activeTool, setActiveTool, showGrid, setShowGrid, onOpenAgent }: ToolbarProps) {
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 rounded-full border border-border/40 bg-background/80 px-2 py-2 shadow-lg backdrop-blur-md">
       <DropdownMenu>
@@ -136,9 +137,19 @@ export function Toolbar({ onAddNode, activeTool, setActiveTool, showGrid, setSho
       >
         <Grid className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="icon" className="rounded-full text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10">
-        <Sparkles className="h-4 w-4" />
-      </Button>
+      <div className="relative group flex items-center justify-center">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="rounded-full text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
+          onClick={onOpenAgent}
+        >
+          <Sparkles className="h-4 w-4" />
+        </Button>
+        <span className="absolute -top-10 left-1/2 -translate-x-1/2 scale-0 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100 bg-card border border-border/50 px-2 py-1 rounded text-[10px] uppercase font-bold text-yellow-500 whitespace-nowrap tracking-wider shadow-sm pointer-events-none">
+          Director
+        </span>
+      </div>
 
       <div className="mx-1 h-6 w-px bg-border/50" />
 

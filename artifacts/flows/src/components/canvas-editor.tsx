@@ -23,6 +23,7 @@ import { Toolbar } from '@/components/toolbar';
 import { Header } from '@/components/header';
 import { TEMPLATE_LAYOUTS } from '@/components/templates';
 import { useGetProject, useUpdateProject, getGetProjectQueryKey } from '@workspace/api-client-react';
+import { AgentPanel } from './agent-panel';
 
 const DEFAULT_TEMPLATE = TEMPLATE_LAYOUTS['1'];
 
@@ -45,6 +46,7 @@ function CanvasEditorInner() {
   const [activeTool, setActiveTool] = useState<'select' | 'pan' | 'cut'>('select');
   const [isRunning, setIsRunning] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
+  const [agentOpen, setAgentOpen] = useState(false);
   const { screenToFlowPosition } = useReactFlow();
 
   // Whether we've applied the saved state from the server
@@ -199,6 +201,28 @@ function CanvasEditorInner() {
     }
   };
 
+  const handleApplyWorkflow = (newNodes: Node[], newEdges: Edge[]) => {
+    const offsetX = nodes.length > 0 ? 200 : 0;
+    const offsetY = nodes.length > 0 ? 200 : 0;
+    const stamped = newNodes.map(n => ({
+      ...n,
+      id: `agent-${Date.now()}-${n.id}`,
+      position: { x: n.position.x + offsetX, y: n.position.y + offsetY }
+    }));
+    const idMap: Record<string, string> = {};
+    newNodes.forEach((n, i) => { idMap[n.id] = stamped[i].id; });
+    const stampedEdges = newEdges.map(e => ({
+      ...e,
+      id: `agent-e-${Date.now()}-${e.id}`,
+      source: idMap[e.source] ?? e.source,
+      target: idMap[e.target] ?? e.target,
+    }));
+    
+    setNodes(nds => [...nds, ...stamped]);
+    setEdges(eds => [...eds, ...stampedEdges]);
+    scheduleSave([...nodes, ...stamped], [...edges, ...stampedEdges]);
+  };
+
   if (projectId && isLoading) {
     return (
       <div className="w-full h-[100dvh] bg-background flex items-center justify-center">
@@ -256,6 +280,13 @@ function CanvasEditorInner() {
         setActiveTool={setActiveTool}
         showGrid={showGrid}
         setShowGrid={setShowGrid}
+        onOpenAgent={() => setAgentOpen(true)}
+      />
+
+      <AgentPanel
+        open={agentOpen}
+        onClose={() => setAgentOpen(false)}
+        onApply={handleApplyWorkflow}
       />
     </div>
   );
