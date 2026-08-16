@@ -121,6 +121,18 @@ LAYOUT RULES:
 - Start first node at x:100, centre the group around y:300
 - Use 3–7 nodes for most workflows; only go larger for explicit batch workflows
 
+EXTENDING AN EXISTING WORKFLOW:
+When the user provides a list of existing canvas nodes (id, type, position) under "Existing canvas nodes:",
+you are designing ONLY the NEW nodes and edges to add to that canvas. Rules:
+- Do NOT recreate nodes that already exist unless explicitly asked.
+- To connect a new node to an existing one, use the existing node's actual "id" value as the edge source or target.
+  Example: if the existing list contains {"id":"agent-1234-ltx-1","type":"LTXProNode","position":{"x":500,"y":300}},
+  you can write {"source":"agent-1234-ltx-1","target":"n1"} to connect from it to your new node "n1".
+- When multiple nodes of the same type exist, connect to the one with the highest x position (rightmost).
+- Position your new nodes to the right of the rightmost existing node. Add at least 400px to its x value.
+- Output ONLY the new nodes and edges. Do not output the existing nodes again.
+- The explanation should describe what you are adding, not the entire workflow.
+
 OUTPUT FORMAT (return ONLY valid JSON, no markdown fences):
 {
   "explanation": "One sentence describing the workflow",
@@ -133,11 +145,23 @@ OUTPUT FORMAT (return ONLY valid JSON, no markdown fences):
 }`;
 
 router.post("/director/orchestrate", async (req, res): Promise<void> => {
-  const { description } = req.body as { description?: string };
+  const { description, currentNodes } = req.body as {
+    description?: string;
+    currentNodes?: Array<{ id: string; type: string; position: { x: number; y: number } }>;
+  };
   if (!description || typeof description !== "string" || !description.trim()) {
     res.status(400).json({ error: "description is required" });
     return;
   }
+
+  const hasExisting =
+    Array.isArray(currentNodes) && currentNodes.length > 0;
+
+  const userContent = hasExisting
+    ? `Existing canvas nodes:\n${currentNodes
+        .map((n) => `  {"id":"${n.id}","type":"${n.type}","position":{"x":${n.position.x},"y":${n.position.y}}}`)
+        .join("\n")}\n\nExtend or modify the workflow for: ${description.trim()}`
+    : `Design a workflow for: ${description.trim()}`;
 
   try {
     const message = await anthropic.messages.create({
@@ -147,7 +171,7 @@ router.post("/director/orchestrate", async (req, res): Promise<void> => {
       messages: [
         {
           role: "user",
-          content: `Design a workflow for: ${description.trim()}`,
+          content: userContent,
         },
       ],
     });

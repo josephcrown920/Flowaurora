@@ -202,22 +202,23 @@ function CanvasEditorInner() {
   };
 
   const handleApplyWorkflow = (newNodes: Node[], newEdges: Edge[]) => {
-    const offsetX = nodes.length > 0 ? 200 : 0;
-    const offsetY = nodes.length > 0 ? 200 : 0;
+    const ts = Date.now();
+    // Stamp only the NEW nodes with fresh IDs; existing-node references in edges
+    // are left as-is via the idMap fallback so they resolve against the live canvas.
     const stamped = newNodes.map(n => ({
       ...n,
-      id: `agent-${Date.now()}-${n.id}`,
-      position: { x: n.position.x + offsetX, y: n.position.y + offsetY }
+      id: `agent-${ts}-${n.id}`,
     }));
     const idMap: Record<string, string> = {};
     newNodes.forEach((n, i) => { idMap[n.id] = stamped[i].id; });
     const stampedEdges = newEdges.map(e => ({
       ...e,
-      id: `agent-e-${Date.now()}-${e.id}`,
+      id: `agent-e-${ts}-${e.id}`,
+      // If the endpoint is a new node, remap it; otherwise keep the existing node's real ID.
       source: idMap[e.source] ?? e.source,
       target: idMap[e.target] ?? e.target,
     }));
-    
+
     setNodes(nds => [...nds, ...stamped]);
     setEdges(eds => [...eds, ...stampedEdges]);
     scheduleSave([...nodes, ...stamped], [...edges, ...stampedEdges]);
@@ -287,6 +288,14 @@ function CanvasEditorInner() {
         open={agentOpen}
         onClose={() => setAgentOpen(false)}
         onApply={handleApplyWorkflow}
+        onReplace={(newNodes, newEdges) => {
+          setNodes(newNodes);
+          setEdges(newEdges);
+          scheduleSave(newNodes, newEdges);
+        }}
+        currentNodes={nodes
+          .filter(n => n.type)
+          .map(n => ({ id: n.id, type: n.type as string, position: n.position }))}
       />
     </div>
   );
