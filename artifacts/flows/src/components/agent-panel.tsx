@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Clapperboard, X, Sparkles, ArrowRight, RotateCcw, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -65,13 +65,94 @@ interface Generation {
   mode: ApplyMode;
 }
 
-function NodePill({ type }: { type: string }) {
+/** Extract complete JSON objects from a running text buffer, returning them and the remaining unparsed tail */
+function extractNextObject(text: string): { obj: unknown; rest: string } | null {
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let start = -1;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+
+    if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        const slice = text.slice(start, i + 1);
+        try {
+          const obj = JSON.parse(slice);
+          return { obj, rest: text.slice(i + 1) };
+        } catch {
+          // Not valid JSON yet, keep scanning
+          start = -1;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Incrementally extract nodes from accumulated streaming text.
+ * Looks for the "nodes" array and parses complete node objects one by one.
+ */
+function extractNodesFromText(text: string): Node[] {
+  const nodesIdx = text.indexOf('"nodes"');
+  if (nodesIdx === -1) return [];
+
+  const bracketIdx = text.indexOf('[', nodesIdx);
+  if (bracketIdx === -1) return [];
+
+  const nodes: Node[] = [];
+  let remaining = text.slice(bracketIdx + 1);
+
+  // Stop if we've hit the closing bracket of the nodes array at depth 0
+  while (remaining.length > 0) {
+    // Trim leading whitespace / commas
+    const trimmed = remaining.replace(/^[\s,]+/, '');
+    if (trimmed.startsWith(']')) break;
+    remaining = trimmed;
+
+    const result = extractNextObject(remaining);
+    if (!result) break;
+
+    try {
+      const node = result.obj as Node;
+      if (node.id && node.type) {
+        nodes.push(node);
+      }
+    } catch {
+      // skip malformed
+    }
+    remaining = result.rest;
+  }
+
+  return nodes;
+}
+
+/**
+ * Try to extract the explanation string from partial JSON text.
+ */
+function extractExplanation(text: string): string | null {
+  const match = text.match(/"explanation"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  return match ? match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') : null;
+}
+
+function NodePill({ type, animate }: { type: string; animate?: boolean }) {
   const color = NODE_COLORS[type] || NODE_COLORS.default;
   const label = NODE_LABELS[type] || type.replace('Node', '');
   return (
     <div className={cn(
       "px-2.5 py-1.5 rounded-full border text-[11px] font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5",
-      color.bg, color.text, color.border
+      color.bg, color.text, color.border,
+      animate && "animate-in fade-in slide-in-from-bottom-2 duration-300"
     )}>
       <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'currentColor' }} />
       {label}
@@ -87,32 +168,50 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
   // Mode is only meaningful when canvas has existing nodes
   const [mode, setMode] = useState<ApplyMode>('extend');
 
+  // Streaming state
+  const [streamingNodes, setStreamingNodes] = useState<Node[]>([]);
+  const [streamingExplanation, setStreamingExplanation] = useState<string | null>(null);
+  const streamingTextRef = useRef('');
+  const knownNodeCountRef = useRef(0);
+
   const hasCanvas = currentNodes.length > 0;
   const currentTypes = Array.from(new Set(currentNodes.map(n => n.type)));
+
+  // The current mode for a new generation
+  const effectiveMode: ApplyMode = hasCanvas ? mode : 'replace';
 
   const handleBuild = async () => {
     if (!description.trim()) return;
     setIsLoading(true);
 
-    // "extend" sends existing node context; "replace" generates a fresh full workflow.
+    // Reset streaming state
+    setStreamingNodes([]);
+    setStreamingExplanation(null);
+    streamingTextRef.current = '';
+    knownNodeCountRef.current = 0;
+
     const sendCurrentNodes = hasCanvas && mode === 'extend';
+    const capturedDescription = description;
 
     try {
       const res = await fetch('/api/director/orchestrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          description,
+          description: capturedDescription,
           currentNodes: sendCurrentNodes ? currentNodes : undefined,
         }),
       });
 
-      let data;
-      if (!res.ok) {
-        data = {
+      if (!res.ok || !res.body) {
+        // Fallback for non-streaming error responses
+        const fallback: Generation = {
+          id: Date.now().toString(),
+          description: capturedDescription,
+          mode: effectiveMode,
           explanation: "I've created a workflow that starts with a Director node to break down the script, followed by multiple LTX video generations.",
           nodes: [
-            { id: "dir-1", type: "DirectorNode", position: { x: 0, y: 0 }, data: { script: description } },
+            { id: "dir-1", type: "DirectorNode", position: { x: 0, y: 0 }, data: { script: capturedDescription } },
             { id: "ltx-1", type: "LTXProNode", position: { x: 400, y: 0 }, data: {} },
             { id: "ltx-2", type: "LTXProNode", position: { x: 400, y: 250 }, data: {} }
           ],
@@ -121,26 +220,84 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
             { id: "e2", source: "dir-1", target: "ltx-2", animated: true }
           ]
         };
-      } else {
-        data = await res.json();
+        if (currentGen) setHistory(prev => [currentGen, ...prev]);
+        setCurrentGen(fallback);
+        setDescription('');
+        return;
       }
 
-      const newGen: Generation = {
-        id: Date.now().toString(),
-        description,
-        mode: hasCanvas ? mode : 'replace',
-        ...data,
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let sseBuffer = '';
+
+      const processSSELine = (line: string) => {
+        if (!line.startsWith('data: ')) return;
+        const jsonStr = line.slice(6);
+        let event: { type: string; text?: string; workflow?: unknown; error?: string };
+        try {
+          event = JSON.parse(jsonStr);
+        } catch {
+          return;
+        }
+
+        if (event.type === 'chunk' && event.text) {
+          streamingTextRef.current += event.text;
+          const accumulated = streamingTextRef.current;
+
+          // Extract explanation as it becomes available
+          const explanation = extractExplanation(accumulated);
+          if (explanation) {
+            setStreamingExplanation(explanation);
+          }
+
+          // Extract nodes incrementally
+          const nodes = extractNodesFromText(accumulated);
+          if (nodes.length > knownNodeCountRef.current) {
+            knownNodeCountRef.current = nodes.length;
+            setStreamingNodes([...nodes]);
+          }
+        } else if (event.type === 'done' && event.workflow) {
+          const wf = event.workflow as { explanation?: string; nodes?: Node[]; edges?: Edge[] };
+          const newGen: Generation = {
+            id: Date.now().toString(),
+            description: capturedDescription,
+            mode: effectiveMode,
+            explanation: wf.explanation ?? streamingExplanation ?? '',
+            nodes: wf.nodes ?? streamingNodes,
+            edges: wf.edges ?? [],
+          };
+          if (currentGen) setHistory(prev => [currentGen, ...prev]);
+          setCurrentGen(newGen);
+          setStreamingNodes([]);
+          setStreamingExplanation(null);
+          setDescription('');
+        } else if (event.type === 'error') {
+          console.error('Director stream error:', event.error);
+        }
       };
 
-      if (currentGen) {
-        setHistory(prev => [currentGen, ...prev]);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        sseBuffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE lines
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop() ?? ''; // keep incomplete last line
+        for (const line of lines) {
+          processSSELine(line.trim());
+        }
       }
-      setCurrentGen(newGen);
-      setDescription('');
+
+      // Process any remaining buffer content
+      if (sseBuffer.trim()) processSSELine(sseBuffer.trim());
+
     } catch (e) {
       console.error(e);
     } finally {
       setIsLoading(false);
+      streamingTextRef.current = '';
+      knownNodeCountRef.current = 0;
     }
   };
 
@@ -152,6 +309,9 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
     }
     onClose();
   };
+
+  // While streaming, show an inline preview card
+  const isStreaming = isLoading && (streamingNodes.length > 0 || streamingExplanation !== null);
 
   return (
     <>
@@ -248,7 +408,60 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
               </div>
             )}
 
-            {currentGen && (
+            {/* Streaming preview card — shown while loading and first data arrives */}
+            {isStreaming && (
+              <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex flex-col gap-4">
+                  {streamingExplanation && (
+                    <p className="text-sm text-foreground/80 leading-relaxed">
+                      {streamingExplanation}
+                      <span className="inline-block ml-1 w-1.5 h-3.5 bg-primary/60 rounded-sm animate-pulse align-middle" />
+                    </p>
+                  )}
+
+                  {streamingNodes.length > 0 && (
+                    <div className="bg-background/50 rounded-lg p-3 border border-border/50 flex items-center gap-1.5 overflow-x-auto hide-scrollbar flex-wrap">
+                      {streamingNodes.map((n, i) => {
+                        const type = n.type as string;
+                        return (
+                          <React.Fragment key={n.id}>
+                            {i > 0 && <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />}
+                            <NodePill type={type} animate />
+                          </React.Fragment>
+                        );
+                      })}
+                      {/* Pulsing placeholder for next incoming node */}
+                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/20 shrink-0" />
+                      <div className="px-2.5 py-1.5 rounded-full border border-border/30 bg-muted/20 flex items-center gap-1.5 animate-pulse">
+                        <div className="h-1.5 w-10 rounded-full bg-muted-foreground/20" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Apply button appears as soon as first node arrives */}
+                  {streamingNodes.length > 0 && (
+                    <Button
+                      className="w-full gap-2 font-semibold shadow-md mt-2 animate-in fade-in duration-300"
+                      size="lg"
+                      disabled
+                    >
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generating…
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Loading spinner before any streaming data arrives */}
+            {isLoading && !isStreaming && (
+              <div className="flex flex-col items-center justify-center text-center h-32 gap-3 opacity-60">
+                <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                <p className="text-sm text-muted-foreground">Director AI is thinking…</p>
+              </div>
+            )}
+
+            {currentGen && !isLoading && (
               <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex flex-col gap-4">
                   <div className="flex items-center gap-2">

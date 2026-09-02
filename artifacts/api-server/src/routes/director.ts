@@ -163,37 +163,51 @@ router.post("/director/orchestrate", async (req, res): Promise<void> => {
         .join("\n")}\n\nExtend or modify the workflow for: ${description.trim()}`
     : `Design a workflow for: ${description.trim()}`;
 
+  // Set up SSE headers for streaming
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  const sendEvent = (data: unknown) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
   try {
-    const message = await anthropic.messages.create({
+    const stream = anthropic.messages.stream({
       model: "claude-sonnet-4-6",
       max_tokens: 2048,
       system: ORCHESTRATE_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: userContent,
-        },
-      ],
+      messages: [{ role: "user", content: userContent }],
     });
 
-    const raw = message.content
-      .filter((b) => b.type === "text")
-      .map((b) => (b as { type: "text"; text: string }).text)
-      .join("");
+    let accumulated = "";
 
-    let workflow: unknown;
-    try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      workflow = JSON.parse(jsonMatch?.[0] ?? raw);
-    } catch {
-      res.status(500).json({ error: "AI returned invalid JSON" });
-      return;
+    for await (const event of stream) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta"
+      ) {
+        const chunk = event.delta.text;
+        accumulated += chunk;
+        sendEvent({ type: "chunk", text: chunk });
+      }
     }
 
-    res.json(workflow);
+    // Parse and send the final structured result
+    try {
+      const jsonMatch = accumulated.match(/\{[\s\S]*\}/);
+      const workflow = JSON.parse(jsonMatch?.[0] ?? accumulated);
+      sendEvent({ type: "done", workflow });
+    } catch {
+      sendEvent({ type: "error", error: "AI returned invalid JSON" });
+    }
   } catch (err: any) {
     req.log.error({ err }, "director/orchestrate failed");
-    res.status(503).json({ error: "AI provider unavailable" });
+    sendEvent({ type: "error", error: "AI provider unavailable" });
+  } finally {
+    res.end();
   }
 });
 
