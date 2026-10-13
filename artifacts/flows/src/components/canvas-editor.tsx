@@ -24,6 +24,8 @@ import { Header } from '@/components/header';
 import { TEMPLATE_LAYOUTS } from '@/components/templates';
 import { useGetProject, useUpdateProject, getGetProjectQueryKey } from '@workspace/api-client-react';
 import { AgentPanel } from './agent-panel';
+import { ToastAction } from '@/components/ui/toast';
+import { toast } from '@/hooks/use-toast';
 
 const DEFAULT_TEMPLATE = TEMPLATE_LAYOUTS['1'];
 
@@ -59,6 +61,7 @@ function CanvasEditorInner() {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInFlight = useRef(false);
   const pendingSnapshot = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
+  const undoSnapshotRef = useRef<{ nodes: Node[]; edges: Edge[]; id: number } | null>(null);
 
   // Restore canvas state when the project loads for the first time
   useEffect(() => {
@@ -201,7 +204,37 @@ function CanvasEditorInner() {
     }
   };
 
+  const offerAiApplyUndo = useCallback((previousNodes: Node[], previousEdges: Edge[]) => {
+    const snapshot = {
+      nodes: structuredClone(previousNodes),
+      edges: structuredClone(previousEdges),
+      id: Date.now(),
+    };
+    undoSnapshotRef.current = snapshot;
+
+    toast({
+      title: 'AI workflow applied',
+      description: 'Your previous canvas can be restored.',
+      duration: 8000,
+      action: (
+        <ToastAction
+          altText="Undo AI workflow changes"
+          onClick={() => {
+            if (undoSnapshotRef.current?.id !== snapshot.id) return;
+            setNodes(snapshot.nodes);
+            setEdges(snapshot.edges);
+            scheduleSave(snapshot.nodes, snapshot.edges);
+            undoSnapshotRef.current = null;
+          }}
+        >
+          Undo
+        </ToastAction>
+      ),
+    });
+  }, [scheduleSave, setEdges, setNodes]);
+
   const handleApplyWorkflow = (newNodes: Node[], newEdges: Edge[]) => {
+    offerAiApplyUndo(nodes, edges);
     const ts = Date.now();
     // Stamp only the NEW nodes with fresh IDs; existing-node references in edges
     // are left as-is via the idMap fallback so they resolve against the live canvas.
@@ -289,6 +322,7 @@ function CanvasEditorInner() {
         onClose={() => setAgentOpen(false)}
         onApply={handleApplyWorkflow}
         onReplace={(newNodes, newEdges) => {
+          offerAiApplyUndo(nodes, edges);
           setNodes(newNodes);
           setEdges(newEdges);
           scheduleSave(newNodes, newEdges);

@@ -4,6 +4,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { CanvasEditor } from '@/components/canvas-editor';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 import LandingPage from '@/pages/landing';
+import { Toaster } from '@/components/ui/toaster';
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ function App() {
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
             <Router />
           </WouterRouter>
+          <Toaster />
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
