@@ -177,6 +177,7 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
   const [streamingExplanation, setStreamingExplanation] = useState<string | null>(null);
   const streamingTextRef = useRef('');
   const knownNodeCountRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -206,8 +207,23 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
   // The current mode for a new generation
   const effectiveMode: ApplyMode = hasCanvas ? mode : 'replace';
 
+  const handleCancel = () => {
+    const controller = abortControllerRef.current;
+    if (!controller) return;
+
+    abortControllerRef.current = null;
+    controller.abort();
+    setIsLoading(false);
+    setStreamingNodes([]);
+    setStreamingExplanation(null);
+    streamingTextRef.current = '';
+    knownNodeCountRef.current = 0;
+  };
+
   const handleBuild = async () => {
-    if (!description.trim()) return;
+    if (!description.trim() || abortControllerRef.current) return;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsLoading(true);
 
     // Reset streaming state
@@ -229,6 +245,7 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
           provider,
           model: provider === 'modelark' ? selectedModel : undefined,
         }),
+        signal: controller.signal,
       });
 
       if (!res.ok || !res.body) {
@@ -321,11 +338,16 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
       if (sseBuffer.trim()) processSSELine(sseBuffer.trim());
 
     } catch (e) {
-      console.error(e);
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        console.error(e);
+      }
     } finally {
-      setIsLoading(false);
-      streamingTextRef.current = '';
-      knownNodeCountRef.current = 0;
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+        setIsLoading(false);
+        streamingTextRef.current = '';
+        knownNodeCountRef.current = 0;
+      }
     }
   };
 
@@ -440,6 +462,19 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
             {isStreaming && (
               <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex flex-col gap-4">
+                  <div className="flex justify-end -mb-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      onClick={handleCancel}
+                      aria-label="Cancel Director AI generation"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Cancel
+                    </Button>
+                  </div>
                   {streamingExplanation && (
                     <p className="text-sm text-foreground/80 leading-relaxed">
                       {streamingExplanation}
@@ -604,9 +639,17 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
               }}
             />
             {isLoading ? (
-              <div className="absolute bottom-3 right-3 flex items-center justify-center bg-primary text-primary-foreground h-8 w-8 rounded-md">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute bottom-3 right-3 h-8 w-8 rounded-md text-primary"
+                onClick={handleCancel}
+                aria-label="Cancel Director AI generation"
+                title="Cancel generation"
+              >
                 <Loader2 className="h-4 w-4 animate-spin" />
-              </div>
+              </Button>
             ) : (
               <Button
                 size="icon"
