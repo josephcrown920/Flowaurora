@@ -1,3 +1,7 @@
+import { createNodeRegistry } from '@workspace/flow-nodes';
+export { availableNodeTypes, nodeCatalog } from '@workspace/flow-nodes';
+export type { AvailableNodeType } from '@workspace/flow-nodes';
+
 import { 
   ImageUploadNode, VideoUploadNode, AudioUploadNode, ImageIteratorNode, 
   PromptNode, PromptBuilderNode, TextIteratorNode, 
@@ -6,7 +10,7 @@ import {
   DirectorNode, CharacterNode, ImageGenNode
 } from './custom-nodes';
 
-export const nodeTypes = {
+export const nodeTypes = createNodeRegistry({
   ImageUploadNode,
   VideoUploadNode,
   AudioUploadNode,
@@ -25,4 +29,4 @@ export const nodeTypes = {
   DirectorNode,
   CharacterNode,
   ImageGenNode,
-};
+});

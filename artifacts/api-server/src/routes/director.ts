@@ -3,6 +3,7 @@ import { db, charactersTable } from "@workspace/db";
 import { inArray } from "drizzle-orm";
 import { ProposeShotsBody, ProposeShotsResponse } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
+import { formatAvailableNodeTypes } from "@workspace/flow-nodes";
 
 const router: IRouter = Router();
 
@@ -88,31 +89,7 @@ const ORCHESTRATE_SYSTEM = `You are a visual AI workflow architect for a video/i
 Users describe what they want to create and you design the optimal node-based workflow.
 
 AVAILABLE NODE TYPES (use exact type name):
-Inputs:
-  - PromptNode       : text prompt input
-  - PromptBuilderNode: dynamic prompt with variables
-  - TextIteratorNode : iterate through multiple text prompts
-  - ImageUploadNode  : provide a reference image
-  - VideoUploadNode  : provide a reference video
-  - AudioUploadNode  : provide audio
-  - ImageIteratorNode: iterate through multiple images
-
-Directors:
-  - DirectorNode     : AI script director — breaks a logline into scene prompts
-  - CharacterNode    : character reference for visual consistency
-
-AI Models:
-  - ImageGenNode     : image generation (FLUX, SDXL, Ideogram)
-  - LTXProNode       : LTX-2.3 Pro — image+prompt → video
-  - NanoBananaProNode: high-quality video generation
-  - AudioToVideoNode : audio-driven video generation
-
-Post-processing:
-  - RemoveBackgroundNode: remove background from image
-  - TopazUpscaleNode    : upscale image or video
-  - VideoExtendNode     : extend video length
-  - ExtractFrameNode    : extract frame from video
-  - DubbingNode         : dub video to another language
+${formatAvailableNodeTypes()}
 
 LAYOUT RULES:
 - Arrange nodes left-to-right in flow order
