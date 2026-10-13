@@ -37,6 +37,8 @@ const NODE_LABELS: Record<string, string> = {
   DubbingNode: 'Dub',
 };
 
+const STREAM_IDLE_TIMEOUT_MS = 20_000;
+
 interface CanvasNodeRef {
   id: string;
   type: string;
@@ -103,19 +105,17 @@ function extractNextObject(text: string): { obj: unknown; rest: string } | null 
  * Incrementally extract nodes from accumulated streaming text.
  * Looks for the "nodes" array and parses complete node objects one by one.
  */
-function extractNodesFromText(text: string): Node[] {
-  const nodesIdx = text.indexOf('"nodes"');
-  if (nodesIdx === -1) return [];
+function extractObjectsFromArray<T>(text: string, key: string): T[] {
+  const arrayIdx = text.indexOf(`"${key}"`);
+  if (arrayIdx === -1) return [];
 
-  const bracketIdx = text.indexOf('[', nodesIdx);
+  const bracketIdx = text.indexOf('[', arrayIdx);
   if (bracketIdx === -1) return [];
 
-  const nodes: Node[] = [];
+  const objects: T[] = [];
   let remaining = text.slice(bracketIdx + 1);
 
-  // Stop if we've hit the closing bracket of the nodes array at depth 0
   while (remaining.length > 0) {
-    // Trim leading whitespace / commas
     const trimmed = remaining.replace(/^[\s,]+/, '');
     if (trimmed.startsWith(']')) break;
     remaining = trimmed;
@@ -124,17 +124,24 @@ function extractNodesFromText(text: string): Node[] {
     if (!result) break;
 
     try {
-      const node = result.obj as Node;
-      if (node.id && node.type) {
-        nodes.push(node);
-      }
+      objects.push(result.obj as T);
     } catch {
-      // skip malformed
+      // Ignore malformed entries and continue with the next complete object.
     }
     remaining = result.rest;
   }
 
-  return nodes;
+  return objects;
+}
+
+function extractNodesFromText(text: string): Node[] {
+  return extractObjectsFromArray<Node>(text, 'nodes')
+    .filter((node) => Boolean(node.id && node.type));
+}
+
+function extractEdgesFromText(text: string): Edge[] {
+  return extractObjectsFromArray<Edge>(text, 'edges')
+    .filter((edge) => Boolean(edge.id && edge.source && edge.target));
 }
 
 /**
@@ -175,7 +182,11 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
   // Streaming state
   const [streamingNodes, setStreamingNodes] = useState<Node[]>([]);
   const [streamingExplanation, setStreamingExplanation] = useState<string | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
   const streamingTextRef = useRef('');
+  const streamingNodesRef = useRef<Node[]>([]);
+  const streamingEdgesRef = useRef<Edge[]>([]);
+  const streamingExplanationRef = useRef<string | null>(null);
   const knownNodeCountRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -216,7 +227,11 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
     setIsLoading(false);
     setStreamingNodes([]);
     setStreamingExplanation(null);
+    setStreamError(null);
     streamingTextRef.current = '';
+    streamingNodesRef.current = [];
+    streamingEdgesRef.current = [];
+    streamingExplanationRef.current = null;
     knownNodeCountRef.current = 0;
   };
 
@@ -225,15 +240,21 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setIsLoading(true);
+    setStreamError(null);
 
     // Reset streaming state
     setStreamingNodes([]);
     setStreamingExplanation(null);
     streamingTextRef.current = '';
+    streamingNodesRef.current = [];
+    streamingEdgesRef.current = [];
+    streamingExplanationRef.current = null;
     knownNodeCountRef.current = 0;
 
     const sendCurrentNodes = hasCanvas && mode === 'extend';
     const capturedDescription = description;
+    let recoverPartial: (() => boolean) | undefined;
+    let cleanupStream: (() => void) | undefined;
 
     try {
       const res = await fetch('/api/director/orchestrate', {
@@ -249,31 +270,87 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
       });
 
       if (!res.ok || !res.body) {
-        // Fallback for non-streaming error responses
-        const fallback: Generation = {
-          id: Date.now().toString(),
-          description: capturedDescription,
-          mode: effectiveMode,
-          explanation: "I've created a workflow that starts with a Director node to break down the script, followed by multiple LTX video generations.",
-          nodes: [
-            { id: "dir-1", type: "DirectorNode", position: { x: 0, y: 0 }, data: { script: capturedDescription } },
-            { id: "ltx-1", type: "LTXProNode", position: { x: 400, y: 0 }, data: {} },
-            { id: "ltx-2", type: "LTXProNode", position: { x: 400, y: 250 }, data: {} }
-          ],
-          edges: [
-            { id: "e1", source: "dir-1", target: "ltx-1", animated: true },
-            { id: "e2", source: "dir-1", target: "ltx-2", animated: true }
-          ]
-        };
-        if (currentGen) setHistory(prev => [currentGen, ...prev]);
-        setCurrentGen(fallback);
-        setDescription('');
+        let message = `Director AI request failed (${res.status}). Please try again.`;
+        try {
+          const payload = await res.json();
+          if (typeof payload?.error === 'string') message = payload.error;
+        } catch {
+          // Keep the status-based message when the response has no JSON body.
+        }
+        setStreamError(message);
         return;
       }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let sseBuffer = '';
+      let idleTimedOut = false;
+      let receivedDone = false;
+      let receivedError: string | null = null;
+      let idleTimer: ReturnType<typeof setTimeout> | undefined;
+
+      const clearIdleTimer = () => {
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = undefined;
+      };
+      cleanupStream = clearIdleTimer;
+
+      const resetIdleTimer = () => {
+        clearIdleTimer();
+        idleTimer = setTimeout(() => {
+          idleTimedOut = true;
+          void reader.cancel().catch(() => undefined);
+        }, STREAM_IDLE_TIMEOUT_MS);
+      };
+
+      const setPartialState = (text: string) => {
+        const explanation = extractExplanation(text);
+        if (explanation) {
+          streamingExplanationRef.current = explanation;
+          setStreamingExplanation(explanation);
+        }
+
+        const nodes = extractNodesFromText(text);
+        if (nodes.length >= streamingNodesRef.current.length) {
+          streamingNodesRef.current = nodes;
+          if (nodes.length > knownNodeCountRef.current) {
+            knownNodeCountRef.current = nodes.length;
+            setStreamingNodes(nodes);
+          }
+        }
+        const edges = extractEdgesFromText(text);
+        if (edges.length >= streamingEdgesRef.current.length) {
+          streamingEdgesRef.current = edges;
+        }
+      };
+
+      const finishWithWorkflow = (workflow?: unknown) => {
+        const wf = workflow && typeof workflow === 'object'
+          ? workflow as { explanation?: string; nodes?: Node[]; edges?: Edge[] }
+          : undefined;
+        const nodes = Array.isArray(wf?.nodes) ? wf.nodes : streamingNodesRef.current;
+        const edges = Array.isArray(wf?.edges) ? wf.edges : streamingEdgesRef.current;
+        const newGen: Generation = {
+          id: Date.now().toString(),
+          description: capturedDescription,
+          mode: effectiveMode,
+          explanation: wf?.explanation ?? streamingExplanationRef.current ?? '',
+          nodes,
+          edges,
+        };
+        if (currentGen) setHistory(prev => [currentGen, ...prev]);
+        setCurrentGen(newGen);
+        setStreamingNodes([]);
+        setStreamingExplanation(null);
+        setDescription('');
+      };
+      recoverPartial = () => {
+        if (streamingNodesRef.current.length === 0 || streamingEdgesRef.current.length === 0) {
+          return false;
+        }
+        finishWithWorkflow();
+        return true;
+      };
 
       const processSSELine = (line: string) => {
         if (!line.startsWith('data: ')) return;
@@ -286,41 +363,23 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
         }
 
         if (event.type === 'chunk' && event.text) {
+          resetIdleTimer();
           streamingTextRef.current += event.text;
-          const accumulated = streamingTextRef.current;
-
-          // Extract explanation as it becomes available
-          const explanation = extractExplanation(accumulated);
-          if (explanation) {
-            setStreamingExplanation(explanation);
-          }
-
-          // Extract nodes incrementally
-          const nodes = extractNodesFromText(accumulated);
-          if (nodes.length > knownNodeCountRef.current) {
-            knownNodeCountRef.current = nodes.length;
-            setStreamingNodes([...nodes]);
-          }
+          setPartialState(streamingTextRef.current);
         } else if (event.type === 'done' && event.workflow) {
-          const wf = event.workflow as { explanation?: string; nodes?: Node[]; edges?: Edge[] };
-          const newGen: Generation = {
-            id: Date.now().toString(),
-            description: capturedDescription,
-            mode: effectiveMode,
-            explanation: wf.explanation ?? streamingExplanation ?? '',
-            nodes: wf.nodes ?? streamingNodes,
-            edges: wf.edges ?? [],
-          };
-          if (currentGen) setHistory(prev => [currentGen, ...prev]);
-          setCurrentGen(newGen);
-          setStreamingNodes([]);
-          setStreamingExplanation(null);
-          setDescription('');
+          receivedDone = true;
+          clearIdleTimer();
+          finishWithWorkflow(event.workflow);
         } else if (event.type === 'error') {
           console.error('Director stream error:', event.error);
+          receivedError = event.error || 'Director AI could not complete this workflow. Please try again.';
+          clearIdleTimer();
+          setStreamError(receivedError);
+          void reader.cancel().catch(() => undefined);
         }
       };
 
+      resetIdleTimer();
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -337,15 +396,43 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
       // Process any remaining buffer content
       if (sseBuffer.trim()) processSSELine(sseBuffer.trim());
 
+      clearIdleTimer();
+      if (!receivedDone && !controller.signal.aborted) {
+        if (recoverPartial?.()) {
+          setStreamError(
+            receivedError
+              ? `${receivedError} A partial workflow was recovered below.`
+              : idleTimedOut
+                ? 'The stream paused, so the partial workflow was recovered below.'
+                : 'The stream ended early, so the partial workflow was recovered below.'
+          );
+        } else if (!receivedError) {
+          setStreamError(
+            idleTimedOut
+              ? 'Director AI stopped responding before a complete workflow arrived. Please try again.'
+              : 'The connection ended before the workflow was complete. Please try again.'
+          );
+        }
+      }
+
     } catch (e) {
-      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+      if (!(e instanceof DOMException && e.name === 'AbortError') && !controller.signal.aborted) {
         console.error(e);
+        if (recoverPartial?.()) {
+          setStreamError('The connection was interrupted, so the partial workflow was recovered below.');
+        } else {
+          setStreamError('Director AI could not complete this workflow. Please try again.');
+        }
       }
     } finally {
+      cleanupStream?.();
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
         setIsLoading(false);
         streamingTextRef.current = '';
+        streamingNodesRef.current = [];
+        streamingEdgesRef.current = [];
+        streamingExplanationRef.current = null;
         knownNodeCountRef.current = 0;
       }
     }
@@ -434,6 +521,15 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
 
         <ScrollArea className="flex-1 p-4">
           <div className="flex flex-col gap-6 pb-24">
+
+            {streamError && (
+              <div
+                className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+                role="alert"
+              >
+                {streamError}
+              </div>
+            )}
 
             {history.length > 0 && (
               <div className="flex flex-col gap-3">

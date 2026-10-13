@@ -184,7 +184,12 @@ router.post("/director/orchestrate", async (req, res): Promise<void> => {
   res.flushHeaders();
 
   const sendEvent = (data: unknown) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    if (res.destroyed || res.writableEnded) return;
+    try {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    } catch (err) {
+      req.log.warn({ err }, "director/orchestrate could not write an SSE event");
+    }
   };
 
   try {
