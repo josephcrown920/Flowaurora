@@ -56,7 +56,7 @@ const nodeCategories = [
     label: "AI Models",
     items: [
       { id: "ImageGenNode", label: "Image Generate", icon: Aperture, accent: "text-sky-400" },
-      { id: "LTXProNode", label: "LTX-2.3 Pro" },
+      { id: "LTXProNode", label: "ModelArk Video" },
       { id: "NanoBananaProNode", label: "Nano Banana Pro" },
       { id: "AudioToVideoNode", label: "Audio to Video" },
     ]

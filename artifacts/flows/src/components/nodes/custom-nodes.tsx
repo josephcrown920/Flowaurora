@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useReactFlow } from '@xyflow/react';
 import { BaseNode } from './base-node';
 import { 
   Image as ImageIcon, 
@@ -24,10 +25,37 @@ import {
   Film,
   ChevronDown,
   ChevronUp,
-  Zap
+  Zap,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+
+type ModelArkChoice = { id: string; capability: string };
+
+function useModelArkModels(capability: string) {
+  const [models, setModels] = useState<ModelArkChoice[]>([]);
+  const [catalogError, setCatalogError] = useState('');
+  React.useEffect(() => {
+    let active = true;
+    fetch('/api/modelark/models')
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Model catalog unavailable.');
+        return payload?.models as ModelArkChoice[];
+      })
+      .then((available) => {
+        if (active && Array.isArray(available)) {
+          setModels(available.filter((model) => model.capability === capability && typeof model.id === 'string'));
+        }
+      })
+      .catch((error) => {
+        if (active) setCatalogError(error instanceof Error ? error.message : 'Model catalog unavailable.');
+      });
+    return () => { active = false; };
+  }, [capability]);
+  return { models, catalogError };
+}
 
 // -- Input Nodes --
 
@@ -368,13 +396,43 @@ export function CharacterNode({ id, data, selected }: any) {
 }
 
 export function ImageGenNode({ id, data, selected }: any) {
-  const [model, setModel] = useState(data?.model || 'flux-dev');
+  const { updateNodeData } = useReactFlow();
+  const { models, catalogError } = useModelArkModels('image');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState('');
+  const model = typeof data?.model === 'string' ? data.model : '';
+  const prompt = typeof data?.prompt === 'string' ? data.prompt : '';
+
+  React.useEffect(() => {
+    if (!model && models.length > 0) updateNodeData(id, { model: models[0].id });
+  }, [id, model, models, updateNodeData]);
+
+  const generate = async () => {
+    setError('');
+    setIsGenerating(true);
+    try {
+      const response = await fetch('/api/modelark/images/generations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, prompt }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result?.error || 'Image generation failed.');
+      updateNodeData(id, { imageUrl: result.imageUrl, generationStatus: 'completed' });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Image generation failed.';
+      setError(message);
+      updateNodeData(id, { generationStatus: 'failed' });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <BaseNode
       id={id}
       selected={selected}
-      title="Image Generate"
+      title="ModelArk Image"
       icon={Aperture}
       iconColor="text-sky-400"
       inputs={[
@@ -393,37 +451,41 @@ export function ImageGenNode({ id, data, selected }: any) {
     >
       {/* Preview area */}
       <div className="aspect-square w-full rounded-md border border-border/50 bg-checkered flex items-center justify-center relative overflow-hidden group">
-        <Aperture className="h-8 w-8 text-sky-400/20" />
+        {data?.imageUrl ? (
+          <img src={data.imageUrl} alt="Generated image preview" className="h-full w-full object-cover" />
+        ) : isGenerating ? (
+          <Loader2 className="h-8 w-8 animate-spin text-sky-400" />
+        ) : (
+          <Aperture className="h-8 w-8 text-sky-400/30" />
+        )}
         <span className="absolute bottom-1.5 right-1.5 rounded bg-sky-500/20 border border-sky-500/30 px-1.5 py-0.5 text-[9px] text-sky-400 font-medium">
-          READY
+          {isGenerating ? 'GENERATING' : data?.imageUrl ? 'READY' : 'MODELARK'}
         </span>
       </div>
 
-      {/* Model + ratio */}
-      <div className="grid grid-cols-2 gap-2 mt-1">
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Model</label>
-          <select
-            className="h-7 rounded-sm border border-border bg-muted/20 text-xs px-1"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-          >
-            <option value="flux-dev">FLUX Dev</option>
-            <option value="flux-pro">FLUX Pro</option>
-            <option value="sdxl">SDXL</option>
-            <option value="ideogram">Ideogram</option>
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Ratio</label>
-          <select className="h-7 rounded-sm border border-border bg-muted/20 text-xs px-1">
-            <option>1:1</option>
-            <option>16:9</option>
-            <option>9:16</option>
-            <option>4:3</option>
-          </select>
-        </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-[10px] text-muted-foreground uppercase tracking-wider">ModelArk image model</label>
+        <select
+          className="h-7 rounded-sm border border-border bg-muted/20 text-xs px-1"
+          value={model}
+          onChange={(e) => updateNodeData(id, { model: e.target.value })}
+          aria-label="Image generation model"
+        >
+          {models.map((entry) => <option key={entry.id} value={entry.id}>{entry.id}</option>)}
+        </select>
       </div>
+      <Textarea
+        className="min-h-[66px] resize-none text-xs bg-muted/20"
+        placeholder="Describe the image to create..."
+        value={prompt}
+        onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
+        aria-label="Image prompt"
+      />
+      {error || catalogError ? <p className="text-[10px] text-destructive" role="status">{error || catalogError}</p> : null}
+      <Button size="sm" className="w-full text-xs" disabled={!model || !prompt.trim() || isGenerating} onClick={generate}>
+        {isGenerating ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Sparkles className="mr-2 h-3 w-3" />}
+        {isGenerating ? 'Generating…' : 'Generate image'}
+      </Button>
     </BaseNode>
   );
 }
@@ -431,11 +493,59 @@ export function ImageGenNode({ id, data, selected }: any) {
 // -- AI Model Nodes --
 
 export function LTXProNode({ id, data, selected }: any) {
+  const { updateNodeData } = useReactFlow();
+  const { models, catalogError } = useModelArkModels('video');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState('');
+  const model = typeof data?.model === 'string' ? data.model : '';
+  const prompt = typeof data?.prompt === 'string' ? data.prompt : '';
+
+  React.useEffect(() => {
+    if (!model && models.length > 0) updateNodeData(id, { model: models[0].id });
+  }, [id, model, models, updateNodeData]);
+
+  const generate = async () => {
+    setError('');
+    setIsGenerating(true);
+    try {
+      const createResponse = await fetch('/api/modelark/videos/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, prompt }),
+      });
+      const created = await createResponse.json();
+      if (!createResponse.ok) throw new Error(created?.error || 'Video task could not start.');
+      updateNodeData(id, { taskId: created.taskId, generationStatus: 'processing', videoUrl: null });
+
+      for (let attempt = 0; attempt < 60; attempt++) {
+        await new Promise((resolve) => window.setTimeout(resolve, 5_000));
+        const pollResponse = await fetch(`/api/modelark/videos/tasks/${encodeURIComponent(created.taskId)}`);
+        const task = await pollResponse.json();
+        if (!pollResponse.ok) throw new Error(task?.error || 'Unable to check video task.');
+        const status = String(task.status || '').toLowerCase();
+        if (task.videoUrl) {
+          updateNodeData(id, { videoUrl: task.videoUrl, generationStatus: 'completed' });
+          return;
+        }
+        if (['failed', 'error', 'cancelled', 'canceled'].includes(status)) {
+          throw new Error(task.error || 'Video generation failed.');
+        }
+      }
+      throw new Error('Video is still processing. Try checking again later.');
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Video generation failed.';
+      setError(message);
+      updateNodeData(id, { generationStatus: 'failed' });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <BaseNode
       id={id}
       selected={selected}
-      title="LTX-2.3 Pro"
+      title="ModelArk Video"
       icon={Wand2}
       iconColor="text-purple-400"
       inputs={[
@@ -447,31 +557,46 @@ export function LTXProNode({ id, data, selected }: any) {
       width={300}
       footer={
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1"><Video className="h-3 w-3"/> 4s</span>
-          <span>1080p</span>
-          <span>16:9</span>
-          <span>x1</span>
+          <span className="flex items-center gap-1"><Video className="h-3 w-3"/> ModelArk</span>
+          <span>Text to video</span>
         </div>
       }
     >
-      <div className="aspect-video w-full rounded-md border border-border/50 bg-checkered" />
-      <div className="grid grid-cols-2 gap-2 mt-2">
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Camera</label>
-          <select className="h-7 rounded-sm border border-border bg-muted/20 text-xs px-1">
-            <option>None</option>
-            <option>Pan Left</option>
-            <option>Zoom In</option>
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Audio</label>
-          <select className="h-7 rounded-sm border border-border bg-muted/20 text-xs px-1">
-            <option>Off</option>
-            <option>Generate</option>
-          </select>
-        </div>
+      <div className="aspect-video w-full rounded-md border border-border/50 bg-checkered flex items-center justify-center overflow-hidden">
+        {data?.videoUrl ? (
+          <video src={data.videoUrl} className="h-full w-full object-cover" controls playsInline />
+        ) : isGenerating ? (
+          <div className="flex flex-col items-center gap-2 text-purple-300">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span className="text-[10px]">Rendering video…</span>
+          </div>
+        ) : (
+          <Video className="h-8 w-8 text-purple-400/30" />
+        )}
       </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-[10px] text-muted-foreground uppercase tracking-wider">ModelArk video model</label>
+        <select
+          className="h-7 rounded-sm border border-border bg-muted/20 text-xs px-1"
+          value={model}
+          onChange={(e) => updateNodeData(id, { model: e.target.value })}
+          aria-label="Video generation model"
+        >
+          {models.map((entry) => <option key={entry.id} value={entry.id}>{entry.id}</option>)}
+        </select>
+      </div>
+      <Textarea
+        className="min-h-[66px] resize-none text-xs bg-muted/20"
+        placeholder="Describe the video to create..."
+        value={prompt}
+        onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
+        aria-label="Video prompt"
+      />
+      {error || catalogError ? <p className="text-[10px] text-destructive" role="status">{error || catalogError}</p> : null}
+      <Button size="sm" className="w-full text-xs" disabled={!model || !prompt.trim() || isGenerating} onClick={generate}>
+        {isGenerating ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Sparkles className="mr-2 h-3 w-3" />}
+        {isGenerating ? 'Generating…' : 'Generate video'}
+      </Button>
     </BaseNode>
   );
 }

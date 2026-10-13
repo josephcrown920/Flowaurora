@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Clapperboard, X, Sparkles, ArrowRight, RotateCcw, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -163,6 +163,10 @@ function NodePill({ type, animate }: { type: string; animate?: boolean }) {
 export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [] }: AgentPanelProps) {
   const [description, setDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [provider, setProvider] = useState<'claude' | 'modelark'>('claude');
+  const [modelArkModels, setModelArkModels] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [modelArkError, setModelArkError] = useState('');
   const [history, setHistory] = useState<Generation[]>([]);
   const [currentGen, setCurrentGen] = useState<Generation | null>(null);
   // Mode is only meaningful when canvas has existing nodes
@@ -173,6 +177,28 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
   const [streamingExplanation, setStreamingExplanation] = useState<string | null>(null);
   const streamingTextRef = useRef('');
   const knownNodeCountRef = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/modelark/models')
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'ModelArk model list unavailable.');
+        return payload?.models as Array<{ id: string; capability: string }>;
+      })
+      .then((models) => {
+        if (!active || !Array.isArray(models)) return;
+        const languageModels = models
+          .filter((entry) => entry.capability === 'language')
+          .map((entry) => entry.id);
+        setModelArkModels(languageModels);
+        setSelectedModel((current) => current || languageModels[0] || '');
+      })
+      .catch((error) => {
+        if (active) setModelArkError(error instanceof Error ? error.message : 'ModelArk model list unavailable.');
+      });
+    return () => { active = false; };
+  }, []);
 
   const hasCanvas = currentNodes.length > 0;
   const currentTypes = Array.from(new Set(currentNodes.map(n => n.type)));
@@ -200,6 +226,8 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
         body: JSON.stringify({
           description: capturedDescription,
           currentNodes: sendCurrentNodes ? currentNodes : undefined,
+          provider,
+          model: provider === 'modelark' ? selectedModel : undefined,
         }),
       });
 
@@ -524,6 +552,42 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
         </ScrollArea>
 
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-card border-t border-border/50 backdrop-blur-xl">
+          <div className="mb-2 grid grid-cols-[110px_1fr] gap-2">
+            <label className="sr-only" htmlFor="director-provider">AI provider</label>
+            <select
+              id="director-provider"
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+              value={provider}
+              onChange={(event) => setProvider(event.target.value === 'modelark' ? 'modelark' : 'claude')}
+              disabled={isLoading}
+            >
+              <option value="claude">Claude</option>
+              <option value="modelark">ModelArk</option>
+            </select>
+            {provider === 'modelark' ? (
+              <>
+                <label className="sr-only" htmlFor="director-model">ModelArk language model</label>
+                <select
+                  id="director-model"
+                  className="h-8 min-w-0 rounded-md border border-border bg-background px-2 text-xs"
+                  value={selectedModel}
+                  onChange={(event) => setSelectedModel(event.target.value)}
+                  disabled={isLoading || modelArkModels.length === 0}
+                >
+                  {modelArkModels.length === 0
+                    ? <option value="">No language models available</option>
+                    : modelArkModels.map((model) => <option key={model} value={model}>{model}</option>)}
+                </select>
+              </>
+            ) : (
+              <div className="h-8 flex items-center rounded-md border border-border/50 bg-muted/20 px-2 text-xs text-muted-foreground">
+                Claude Sonnet
+              </div>
+            )}
+          </div>
+          {provider === 'modelark' && modelArkError ? (
+            <p className="mb-2 text-xs text-destructive" role="status">{modelArkError}</p>
+          ) : null}
           <div className="relative">
             <Textarea
               placeholder={hasCanvas && mode === 'extend'
@@ -548,7 +612,7 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
                 size="icon"
                 className="absolute bottom-3 right-3 h-8 w-8 rounded-md"
                 onClick={handleBuild}
-                disabled={!description.trim()}
+                disabled={!description.trim() || (provider === 'modelark' && !selectedModel)}
               >
                 <Sparkles className="h-4 w-4" />
               </Button>

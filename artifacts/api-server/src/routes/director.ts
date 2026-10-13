@@ -4,6 +4,7 @@ import { inArray } from "drizzle-orm";
 import { ProposeShotsBody, ProposeShotsResponse } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { formatAvailableNodeTypes } from "@workspace/flow-nodes";
+import { assertModelArkModel, streamModelArkChat } from "../lib/modelark";
 
 const router: IRouter = Router();
 
@@ -122,17 +123,52 @@ OUTPUT FORMAT (return ONLY valid JSON, no markdown fences):
 }`;
 
 router.post("/director/orchestrate", async (req, res): Promise<void> => {
-  const { description, currentNodes } = req.body as {
-    description?: string;
-    currentNodes?: Array<{ id: string; type: string; position: { x: number; y: number } }>;
-  };
-  if (!description || typeof description !== "string" || !description.trim()) {
-    res.status(400).json({ error: "description is required" });
+  const description =
+    typeof req.body?.description === "string" ? req.body.description.trim() : "";
+  const provider = req.body?.provider === "modelark" ? "modelark" : "claude";
+  const model = typeof req.body?.model === "string" ? req.body.model : "";
+  const rawNodes = req.body?.currentNodes;
+  if (!description || description.length > 4_000) {
+    res.status(400).json({ error: "Description must be between 1 and 4,000 characters." });
     return;
   }
+  if (rawNodes !== undefined && !Array.isArray(rawNodes)) {
+    res.status(400).json({ error: "currentNodes must be an array." });
+    return;
+  }
+  if (Array.isArray(rawNodes) && rawNodes.length > 100) {
+    res.status(400).json({ error: "A maximum of 100 existing nodes can be included." });
+    return;
+  }
+  const currentNodes = (rawNodes ?? []).filter((node: any) =>
+    node &&
+    typeof node.id === "string" &&
+    node.id.length <= 120 &&
+    typeof node.type === "string" &&
+    node.type.length <= 80 &&
+    Number.isFinite(node.position?.x) &&
+    Number.isFinite(node.position?.y),
+  ) as Array<{ id: string; type: string; position: { x: number; y: number } }>;
+  if (provider === "modelark") {
+    if (!model || model.length > 160) {
+      res.status(400).json({ error: "Select a ModelArk language model." });
+      return;
+    }
+    try {
+      await assertModelArkModel(model, ["language"]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      if (message === "Invalid model id" || message === "Model is unavailable for this capability") {
+        res.status(400).json({ error: message });
+        return;
+      }
+      req.log.error({ err }, "ModelArk model validation failed");
+      res.status(503).json({ error: "ModelArk model catalog is unavailable." });
+      return;
+    }
+  }
 
-  const hasExisting =
-    Array.isArray(currentNodes) && currentNodes.length > 0;
+  const hasExisting = currentNodes.length > 0;
 
   const userContent = hasExisting
     ? `Existing canvas nodes:\n${currentNodes
@@ -152,23 +188,28 @@ router.post("/director/orchestrate", async (req, res): Promise<void> => {
   };
 
   try {
-    const stream = anthropic.messages.stream({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2048,
-      system: ORCHESTRATE_SYSTEM,
-      messages: [{ role: "user", content: userContent }],
-    });
-
     let accumulated = "";
-
-    for await (const event of stream) {
-      if (
-        event.type === "content_block_delta" &&
-        event.delta.type === "text_delta"
-      ) {
-        const chunk = event.delta.text;
+    if (provider === "modelark") {
+      await streamModelArkChat(model, ORCHESTRATE_SYSTEM, userContent, (chunk) => {
         accumulated += chunk;
         sendEvent({ type: "chunk", text: chunk });
+      });
+    } else {
+      const stream = anthropic.messages.stream({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2048,
+        system: ORCHESTRATE_SYSTEM,
+        messages: [{ role: "user", content: userContent }],
+      });
+      for await (const event of stream) {
+        if (
+          event.type === "content_block_delta" &&
+          event.delta.type === "text_delta"
+        ) {
+          const chunk = event.delta.text;
+          accumulated += chunk;
+          sendEvent({ type: "chunk", text: chunk });
+        }
       }
     }
 
