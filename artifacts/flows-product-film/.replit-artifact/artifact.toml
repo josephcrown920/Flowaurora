@@ -1,0 +1,29 @@
+kind = "video"
+videoAspectRatio = "16:9"
+previewPath = "/flows-product-film/"
+title = "Flows — Product Film"
+description = "An animated product film introducing Flows, its visual workflow canvas, Director AI, and integrated ModelArk image and video generation."
+version = "1.0.0"
+id = "artifacts/flows-product-film"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/flows-product-film/" ]
+localPort = 25026
+
+[services.development]
+run = "pnpm --filter @workspace/flows-product-film run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/flows-product-film", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/flows-product-film/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25026"
+BASE_PATH = "/flows-product-film/"
