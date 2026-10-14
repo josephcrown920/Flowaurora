@@ -145,11 +145,49 @@ function extractEdgesFromText(text: string): Edge[] {
 }
 
 /**
- * Try to extract the explanation string from partial JSON text.
+ * Decode the explanation value as it is being generated in partial JSON text.
+ * Incomplete escape sequences are held back until the next stream chunk.
  */
 function extractExplanation(text: string): string | null {
-  const match = text.match(/"explanation"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-  return match ? match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') : null;
+  const match = /"explanation"\s*:\s*"/.exec(text);
+  if (!match || match.index === undefined) return null;
+
+  let explanation = '';
+  const valueStart = match.index + match[0].length;
+  for (let i = valueStart; i < text.length; i += 1) {
+    const character = text[i];
+    if (character === '"') return explanation;
+    if (character !== '\\') {
+      explanation += character;
+      continue;
+    }
+
+    const escape = text[i + 1];
+    if (escape === undefined) break;
+    const escapedCharacters: Record<string, string> = {
+      '"': '"',
+      '\\': '\\',
+      '/': '/',
+      b: '\b',
+      f: '\f',
+      n: '\n',
+      r: '\r',
+      t: '\t',
+    };
+    if (escape === 'u') {
+      const hex = text.slice(i + 2, i + 6);
+      if (hex.length < 4 || !/^[\da-f]{4}$/i.test(hex)) break;
+      explanation += String.fromCharCode(parseInt(hex, 16));
+      i += 5;
+    } else {
+      const decoded = escapedCharacters[escape];
+      if (decoded === undefined) break;
+      explanation += decoded;
+      i += 1;
+    }
+  }
+
+  return explanation;
 }
 
 function NodePill({ type, animate }: { type: string; animate?: boolean }) {
@@ -305,7 +343,7 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
 
       const setPartialState = (text: string) => {
         const explanation = extractExplanation(text);
-        if (explanation) {
+        if (explanation !== null) {
           streamingExplanationRef.current = explanation;
           setStreamingExplanation(explanation);
         }
@@ -571,10 +609,15 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
                       Cancel
                     </Button>
                   </div>
-                  {streamingExplanation && (
+                  {streamingExplanation !== null && (
                     <p className="text-sm text-foreground/80 leading-relaxed">
                       {streamingExplanation}
-                      <span className="inline-block ml-1 w-1.5 h-3.5 bg-primary/60 rounded-sm animate-pulse align-middle" />
+                      {isLoading && (
+                        <span
+                          aria-hidden="true"
+                          className="inline-block ml-1 w-1.5 h-3.5 bg-primary/60 rounded-sm animate-cursor-blink align-middle"
+                        />
+                      )}
                     </p>
                   )}
 
