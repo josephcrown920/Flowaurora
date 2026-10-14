@@ -5,11 +5,14 @@ import {
   modelArkCapability,
   modelArkRequest,
 } from "../lib/modelark";
+import { findModelArkMedia, imageBufferSource, storeModelArkMedia } from "../lib/modelarkMedia";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 const router: IRouter = Router();
 
 const requestCounts = new Map<string, { count: number; resetAt: number }>();
-const taskOwners = new Map<string, { ip: string; expiresAt: number }>();
+const taskOwners = new Map<string, { ip: string; expiresAt: number; mediaUrl?: string }>();
 const paidRouteLimit = (req: any, res: any, next: any): void => {
   const now = Date.now();
   if (requestCounts.size > 2_000) {
@@ -55,6 +58,33 @@ function safeHttpsUrl(value: unknown): string | undefined {
   }
 }
 
+async function storeProviderMedia(
+  url: string,
+  kind: "image" | "video",
+  maxBytes: number,
+): Promise<string> {
+  const upstream = await fetch(url, {
+    redirect: "error",
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!upstream.ok || !upstream.body) {
+    throw new Error(`ModelArk media download failed (${upstream.status}).`);
+  }
+  const contentLength = Number(upstream.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    await upstream.body.cancel();
+    throw new Error(`ModelArk ${kind} exceeds the storage size limit.`);
+  }
+  return storeModelArkMedia(
+    Readable.fromWeb(upstream.body as import("node:stream/web").ReadableStream),
+    {
+      kind,
+      contentType: upstream.headers.get("content-type") ?? "",
+      maxBytes,
+    },
+  );
+}
+
 router.get("/modelark/models", async (req, res): Promise<void> => {
   try {
     const models = await listModelArkModels();
@@ -94,18 +124,25 @@ router.post("/modelark/images/generations", paidRouteLimit, async (req, res): Pr
     }
     const payload: any = await upstream.json();
     const first = Array.isArray(payload?.data) ? payload.data[0] : undefined;
-    const imageUrl =
-      safeHttpsUrl(first?.url) ??
-      (typeof first?.b64_json === "string" &&
+    const providerImageUrl = safeHttpsUrl(first?.url);
+    const base64Image =
+      typeof first?.b64_json === "string" &&
       first.b64_json.length <= 8 * 1024 * 1024 &&
       /^[A-Za-z0-9+/]+=*$/.test(first.b64_json)
-        ? `data:image/png;base64,${first.b64_json}`
-        : undefined);
-    if (!imageUrl) {
+        ? Buffer.from(first.b64_json, "base64")
+        : undefined;
+    if (!providerImageUrl && !base64Image) {
       req.log.warn({ model }, "ModelArk image response did not contain an image");
       res.status(502).json({ error: "ModelArk returned no image. Try another model or prompt." });
       return;
     }
+    const imageUrl = providerImageUrl
+      ? await storeProviderMedia(providerImageUrl, "image", 20 * 1024 * 1024)
+      : await storeModelArkMedia(imageBufferSource(base64Image!), {
+          kind: "image",
+          contentType: "image/png",
+          maxBytes: 8 * 1024 * 1024,
+        });
     res.json({ imageUrl, model });
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
@@ -177,6 +214,10 @@ router.get("/modelark/videos/tasks/:taskId", async (req, res): Promise<void> => 
     res.status(403).json({ error: "This video task belongs to another session." });
     return;
   }
+  if (taskOwner.mediaUrl) {
+    res.json({ taskId, status: "completed", videoUrl: taskOwner.mediaUrl });
+    return;
+  }
   try {
     const upstream = await modelArkRequest(`/contents/generations/tasks/${encodeURIComponent(taskId)}`, {
       signal: AbortSignal.timeout(20_000),
@@ -193,15 +234,41 @@ router.get("/modelark/videos/tasks/:taskId", async (req, res): Promise<void> => 
       task?.output?.video_url ??
       task?.video_url ??
       task?.output?.[0]?.url;
+    const providerVideoUrl = safeHttpsUrl(rawVideoUrl);
+    const videoUrl = providerVideoUrl
+      ? await storeProviderMedia(providerVideoUrl, "video", 512 * 1024 * 1024)
+      : undefined;
+    if (videoUrl) taskOwner.mediaUrl = videoUrl;
     res.json({
       taskId,
-      status: typeof task?.status === "string" ? task.status : "processing",
-      videoUrl: safeHttpsUrl(rawVideoUrl),
+      status: videoUrl ? "completed" : typeof task?.status === "string" ? task.status : "processing",
+      videoUrl,
       error: typeof task?.error?.message === "string" ? task.error.message.slice(0, 500) : undefined,
     });
   } catch (err) {
     req.log.error({ err }, "ModelArk video task lookup failed");
     res.status(503).json({ error: "Unable to check video generation status." });
+  }
+});
+
+router.get("/modelark/media/:mediaId", async (req, res): Promise<void> => {
+  try {
+    const mediaId = Array.isArray(req.params.mediaId) ? req.params.mediaId[0] : req.params.mediaId;
+    const file = await findModelArkMedia(mediaId);
+    if (!file) {
+      res.status(404).json({ error: "Generated media not found." });
+      return;
+    }
+    const [metadata] = await file.getMetadata();
+    res.setHeader("Content-Type", metadata.contentType ?? "application/octet-stream");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    if (metadata.size) res.setHeader("Content-Length", String(metadata.size));
+    await pipeline(file.createReadStream(), res);
+  } catch (err) {
+    req.log.error({ err }, "Stored ModelArk media could not be served");
+    if (!res.headersSent) res.status(500).json({ error: "Generated media could not be loaded." });
+    else res.destroy(err instanceof Error ? err : undefined);
   }
 });
 
