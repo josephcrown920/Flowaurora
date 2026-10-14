@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { useLocation } from 'wouter';
 
 type ModelArkChoice = { id: string; capability: string };
 
@@ -494,6 +495,7 @@ export function ImageGenNode({ id, data, selected }: any) {
 
 export function LTXProNode({ id, data, selected }: any) {
   const { updateNodeData } = useReactFlow();
+  const [, setLocation] = useLocation();
   const { models, catalogError } = useModelArkModels('video');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
@@ -574,6 +576,24 @@ export function LTXProNode({ id, data, selected }: any) {
           <Video className="h-8 w-8 text-purple-400/30" />
         )}
       </div>
+      {data?.generationStatus === 'completed' && typeof data?.videoUrl === 'string' && (
+        <Button
+          size="sm"
+          variant="secondary"
+          className="w-full text-xs"
+          data-testid={`button-edit-video-${id}`}
+          onClick={() => {
+            const params = new URLSearchParams(window.location.search);
+            const projectId = params.get('projectId');
+            const query = new URLSearchParams({ source: data.videoUrl, nodeId: String(id) });
+            if (projectId && /^\d+$/.test(projectId)) query.set('projectId', projectId);
+            setLocation(`/editor?${query.toString()}`);
+          }}
+        >
+          <Scissors className="mr-2 h-3 w-3" />
+          Edit video
+        </Button>
+      )}
       <div className="flex flex-col gap-1">
         <label className="text-[10px] text-muted-foreground uppercase tracking-wider">ModelArk video model</label>
         <select

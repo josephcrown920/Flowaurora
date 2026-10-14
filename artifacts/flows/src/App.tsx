@@ -4,6 +4,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { CanvasEditor } from '@/components/canvas-editor';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 import LandingPage from '@/pages/landing';
+import EditorPage from '@/pages/editor';
 import { Toaster } from '@/components/ui/toaster';
 
 const queryClient = new QueryClient();
@@ -15,6 +16,7 @@ function Router() {
       <Route path="/canvas">
         <CanvasEditor />
       </Route>
+      <Route path="/editor" component={EditorPage} />
       <Route>404 Not Found</Route>
     </Switch>
   );
