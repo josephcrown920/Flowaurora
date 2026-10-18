@@ -9,4 +9,7 @@ import type { ModelChoice } from './modelChoice';
 
 export interface ModelChoicesResponse {
   models: ModelChoice[];
+  available: boolean;
+  geminiImageAvailable: boolean;
+  mediaStorageAvailable: boolean;
 }

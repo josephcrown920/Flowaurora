@@ -413,7 +413,7 @@ paths:
       summary: List chat models available through Replit AI Integrations
       responses:
         "200":
-          description: Supported OpenAI chat model choices
+          description: Supported OpenAI chat model choices and Replit integration readiness
           content:
             application/json:
               schema:
@@ -426,11 +426,11 @@ paths:
       summary: List currently available free OpenRouter text models
       responses:
         "200":
-          description: Free text model choices
+          description: Free text model choices and active billing route
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModelChoicesResponse"
+                $ref: "#/components/schemas/OpenRouterModelChoicesResponse"
         "503":
           description: OpenRouter's public model catalog is unavailable
 
@@ -438,7 +438,7 @@ paths:
     post:
       operationId: generateCanvasImage
       tags: [generate]
-      summary: Generate a canvas image with Replit's OpenAI integration
+      summary: Generate a canvas image with Replit OpenAI or direct Gemini
       requestBody:
         required: true
         content:
@@ -455,7 +455,7 @@ paths:
         "400":
           description: Invalid model or prompt
         "503":
-          description: Replit image generation or media storage is unavailable
+          description: Selected image provider or media storage is unavailable
 
   /generate/character-portrait:
     post:
@@ -701,17 +701,38 @@ components:
         contextLength: { type: integer }
     ModelChoicesResponse:
       type: object
-      required: [models]
+      required: [models, available, geminiImageAvailable, mediaStorageAvailable]
       properties:
         models:
           type: array
           items:
             $ref: "#/components/schemas/ModelChoice"
+        available: { type: boolean }
+        geminiImageAvailable: { type: boolean }
+        mediaStorageAvailable: { type: boolean }
+    OpenRouterModelChoicesResponse:
+      type: object
+      required: [models, accessMode]
+      properties:
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelChoice"
+        accessMode: { type: string, enum: [replit, direct, unavailable] }
     CanvasImageGenerationInput:
       type: object
       required: [model, prompt]
       properties:
-        model: { type: string, enum: [gpt-image-1] }
+        model:
+          type: string
+          enum:
+            [
+              gpt-image-1,
+              gemini-nano-banana-2.1,
+              gemini-3.1-flash-lite-image,
+              gemini-3.1-flash-image,
+              gemini-3-pro-image,
+            ]
         prompt: { type: string, minLength: 1, maxLength: 8000 }
     CanvasImageGenerationResponse:
       type: object

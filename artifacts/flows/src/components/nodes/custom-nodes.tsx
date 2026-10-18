@@ -401,11 +401,17 @@ export function ImageGenNode({ id, data, selected }: any) {
   const { models, catalogError } = useModelArkModels('image');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
-  const [provider, setProvider] = useState<'modelark' | 'replit'>(
-    data?.provider === 'replit' ? 'replit' : 'modelark'
+  const [provider, setProvider] = useState<'modelark' | 'replit' | 'gemini'>(
+    data?.provider === 'replit' ? 'replit' : data?.provider === 'gemini' ? 'gemini' : 'modelark'
   );
   const model = typeof data?.model === 'string' ? data.model : '';
   const prompt = typeof data?.prompt === 'string' ? data.prompt : '';
+  const geminiModels = [
+    { id: 'gemini-3.1-flash-lite-image', name: 'Nano Banana 2 Lite · fastest/lowest cost' },
+    { id: 'gemini-nano-banana-2.1', name: 'Nano Banana 2.1 · recommended' },
+    { id: 'gemini-3.1-flash-image', name: 'Nano Banana 2 · high detail' },
+    { id: 'gemini-3-pro-image', name: 'Nano Banana Pro · premium' },
+  ];
 
   React.useEffect(() => {
     if (!model && models.length > 0) updateNodeData(id, { model: models[0].id });
@@ -418,11 +424,11 @@ export function ImageGenNode({ id, data, selected }: any) {
     setIsGenerating(true);
     try {
       const response = await fetch(
-        provider === 'replit' ? '/api/generate/canvas-image' : '/api/modelark/images/generations',
+        provider === 'modelark' ? '/api/modelark/images/generations' : '/api/generate/canvas-image',
         {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: selectedModel, prompt }),
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: selectedModel, prompt }),
         }
       );
       const result = await response.json();
@@ -441,7 +447,7 @@ export function ImageGenNode({ id, data, selected }: any) {
     <BaseNode
       id={id}
       selected={selected}
-      title={provider === 'replit' ? 'Replit Image' : 'ModelArk Image'}
+      title={provider === 'replit' ? 'Replit Image' : provider === 'gemini' ? 'Gemini Image' : 'ModelArk Image'}
       icon={Aperture}
       iconColor="text-sky-400"
       inputs={[
@@ -468,7 +474,7 @@ export function ImageGenNode({ id, data, selected }: any) {
           <Aperture className="h-8 w-8 text-sky-400/30" />
         )}
         <span className="absolute bottom-1.5 right-1.5 rounded bg-sky-500/20 border border-sky-500/30 px-1.5 py-0.5 text-[9px] text-sky-400 font-medium">
-          {isGenerating ? 'GENERATING' : data?.imageUrl ? 'READY' : provider === 'replit' ? 'REPLIT CREDITS' : 'MODELARK'}
+          {isGenerating ? 'GENERATING' : data?.imageUrl ? 'READY' : provider === 'replit' ? 'REPLIT CREDITS' : provider === 'gemini' ? 'GOOGLE API' : 'MODELARK'}
         </span>
       </div>
 
@@ -478,14 +484,22 @@ export function ImageGenNode({ id, data, selected }: any) {
           className="h-7 rounded-sm border border-border bg-muted/20 text-xs px-1"
           value={provider}
           onChange={(e) => {
-            const next = e.target.value === 'replit' ? 'replit' : 'modelark';
+            const next = e.target.value === 'replit' || e.target.value === 'gemini' ? e.target.value : 'modelark';
             setProvider(next);
-            updateNodeData(id, { provider: next, model: next === 'replit' ? 'gpt-image-1' : (models[0]?.id ?? '') });
+            updateNodeData(id, {
+              provider: next,
+              model: next === 'replit'
+                ? 'gpt-image-1'
+                : next === 'gemini'
+                  ? geminiModels[0].id
+                  : (models[0]?.id ?? ''),
+            });
           }}
           aria-label="Image provider"
         >
           <option value="modelark">ModelArk</option>
           <option value="replit">OpenAI GPT Image 1 · Replit credits</option>
+          <option value="gemini">Gemini image · Google API billing</option>
         </select>
         {provider === 'modelark' ? (
           <>
@@ -499,6 +513,20 @@ export function ImageGenNode({ id, data, selected }: any) {
             >
               {models.map((entry) => <option key={entry.id} value={entry.id}>{entry.id}</option>)}
             </select>
+          </>
+        ) : provider === 'gemini' ? (
+          <>
+            <label className="sr-only" htmlFor={`gemini-image-model-${id}`}>Gemini image model</label>
+            <select
+              id={`gemini-image-model-${id}`}
+              className="h-7 rounded-sm border border-border bg-muted/20 text-xs px-1"
+              value={model || geminiModels[0].id}
+              onChange={(e) => updateNodeData(id, { model: e.target.value })}
+              aria-label="Gemini image model"
+            >
+              {geminiModels.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+            </select>
+            <p className="text-[9px] text-muted-foreground">Uses your Google API key, not Replit credits.</p>
           </>
         ) : (
           <div className="h-7 rounded-sm border border-border/50 bg-muted/20 px-2 flex items-center text-xs text-muted-foreground">
@@ -590,7 +618,7 @@ export function LTXProNode({ id, data, selected }: any) {
       width={300}
       footer={
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1"><Video className="h-3 w-3"/> ModelArk</span>
+          <span className="flex items-center gap-1"><Video className="h-3 w-3"/> ModelArk · external</span>
           <span>Text to video</span>
         </div>
       }
@@ -607,6 +635,7 @@ export function LTXProNode({ id, data, selected }: any) {
           <Video className="h-8 w-8 text-purple-400/30" />
         )}
       </div>
+      <p className="text-[9px] text-muted-foreground">Uses ModelArk billing. Replit AI integrations do not provide app video output.</p>
       {data?.generationStatus === 'completed' && typeof data?.videoUrl === 'string' && (
         <Button
           size="sm"

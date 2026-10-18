@@ -14,6 +14,13 @@ import { imageBufferSource, storeModelArkMedia } from "../lib/modelarkMedia";
 
 const router: IRouter = Router();
 
+const GEMINI_IMAGE_MODELS = new Set([
+  "gemini-nano-banana-2.1",
+  "gemini-3.1-flash-lite-image",
+  "gemini-3.1-flash-image",
+  "gemini-3-pro-image",
+]);
+
 async function getImageModule() {
   try {
     const mod = await import("@workspace/integrations-openai-ai-server/image");
@@ -23,6 +30,51 @@ async function getImageModule() {
   }
 }
 
+async function generateGeminiImage(model: string, prompt: string): Promise<{ buffer: Buffer; contentType: string }> {
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured.");
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+      }),
+      signal: AbortSignal.timeout(120_000),
+    },
+  );
+  if (!response.ok) {
+    const error = new Error(`Gemini image generation request failed (${response.status}).`) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
+  }
+
+  const payload = await response.json() as {
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{
+          inlineData?: { data?: string; mimeType?: string };
+        }>;
+      };
+    }>;
+  };
+  const imagePart = payload.candidates?.[0]?.content?.parts?.find(
+    (part) => typeof part.inlineData?.data === "string",
+  )?.inlineData;
+  if (!imagePart?.data) throw new Error("Gemini returned no image data.");
+
+  return {
+    buffer: Buffer.from(imagePart.data, "base64"),
+    contentType: imagePart.mimeType || "image/png",
+  };
+}
+
 function bufferToDataUrl(buffer: Buffer): string {
   return `data:image/png;base64,${buffer.toString("base64")}`;
 }
@@ -30,28 +82,53 @@ function bufferToDataUrl(buffer: Buffer): string {
 router.post("/generate/canvas-image", async (req, res): Promise<void> => {
   const model = typeof req.body?.model === "string" ? req.body.model : "";
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
-  if (model !== "gpt-image-1" || !prompt || prompt.length > 8_000) {
-    res.status(400).json({ error: "Select gpt-image-1 and provide a prompt up to 8,000 characters." });
+  if (!prompt || prompt.length > 8_000 || (model !== "gpt-image-1" && !GEMINI_IMAGE_MODELS.has(model))) {
+    res.status(400).json({ error: "Select a supported image model and provide a prompt up to 8,000 characters." });
     return;
   }
 
-  const imgMod = await getImageModule();
-  if (!imgMod) {
-    res.status(503).json({ error: "Replit image generation is unavailable." });
+  if (!process.env.PRIVATE_OBJECT_DIR?.trim()) {
+    res.status(503).json({ error: "Generated media storage is not available in this runtime." });
     return;
   }
 
   try {
-    const buffer = await imgMod.generateImageBuffer(prompt, "1024x1024");
+    let buffer: Buffer;
+    let contentType = "image/png";
+    if (model === "gpt-image-1") {
+      const imgMod = await getImageModule();
+      if (!imgMod) {
+        res.status(503).json({ error: "Replit OpenAI image integration is not available in this runtime." });
+        return;
+      }
+      buffer = await imgMod.generateImageBuffer(prompt, "1024x1024");
+    } else {
+      const generated = await generateGeminiImage(model, prompt);
+      buffer = generated.buffer;
+      contentType = generated.contentType;
+    }
+
     const imageUrl = await storeModelArkMedia(imageBufferSource(buffer), {
       kind: "image",
-      contentType: "image/png",
+      contentType,
       maxBytes: 20 * 1024 * 1024,
     });
     res.json({ imageUrl, model });
   } catch (err) {
-    req.log.error({ err, model }, "Replit canvas image generation failed");
-    res.status(503).json({ error: "Image generation failed. Check Replit AI and media storage availability." });
+    const status = typeof err === "object" && err !== null && "status" in err
+      ? Number((err as { status?: unknown }).status)
+      : undefined;
+    req.log.error(
+      { model, error: err instanceof Error ? err.message : "Unknown generation error" },
+      "Canvas image generation failed",
+    );
+    res.status(503).json({
+      error: model === "gpt-image-1"
+        ? "Replit image generation or media storage is unavailable."
+        : status === 429
+          ? "Google is temporarily rate-limiting this Gemini image model. Try a different Gemini model or retry later."
+        : "Gemini image generation or media storage is unavailable.",
+    });
   }
 });
 

@@ -286,7 +286,12 @@ router.post("/director/orchestrate", async (req, res): Promise<void> => {
     }
   } catch (err: any) {
     req.log.error({ err }, "director/orchestrate failed");
-    sendEvent({ type: "error", error: "AI provider unavailable" });
+    sendEvent({
+      type: "error",
+      error: provider === "openrouter" && err?.status === 429
+        ? "This free OpenRouter model is temporarily rate-limited upstream. Choose another free model or retry later."
+        : "AI provider unavailable",
+    });
   } finally {
     res.end();
   }

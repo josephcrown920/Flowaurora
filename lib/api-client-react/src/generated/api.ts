@@ -31,6 +31,7 @@ import type {
   HealthStatus,
   ListShotsParams,
   ModelChoicesResponse,
+  OpenRouterModelChoicesResponse,
   OrchestrateInput,
   Project,
   ProjectInput,
@@ -1567,9 +1568,9 @@ export const getListOpenRouterFreeModelsUrl = () => {
 /**
  * @summary List currently available free OpenRouter text models
  */
-export const listOpenRouterFreeModels = async ( options?: Parameters<typeof customFetch>[1]): Promise<ModelChoicesResponse> => {
+export const listOpenRouterFreeModels = async ( options?: Parameters<typeof customFetch>[1]): Promise<OpenRouterModelChoicesResponse> => {
 
-  return customFetch<ModelChoicesResponse>(getListOpenRouterFreeModelsUrl(),
+  return customFetch<OpenRouterModelChoicesResponse>(getListOpenRouterFreeModelsUrl(),
   {
     ...options,
     method: 'GET'
@@ -1642,7 +1643,7 @@ export const getGenerateCanvasImageUrl = () => {
 }
 
 /**
- * @summary Generate a canvas image with Replit's OpenAI integration
+ * @summary Generate a canvas image with Replit OpenAI or direct Gemini
  */
 export const generateCanvasImage = async (canvasImageGenerationInput: CanvasImageGenerationInput, options?: Parameters<typeof customFetch>[1]): Promise<CanvasImageGenerationResponse> => {
 
@@ -1691,7 +1692,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type GenerateCanvasImageMutationError = ErrorType<void>
 
     /**
- * @summary Generate a canvas image with Replit's OpenAI integration
+ * @summary Generate a canvas image with Replit OpenAI or direct Gemini
  */
 export const useGenerateCanvasImage = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCanvasImage>>, TError,{data: BodyType<CanvasImageGenerationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}

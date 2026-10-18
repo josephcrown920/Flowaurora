@@ -440,7 +440,10 @@ export const ListReplitChatModelsResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "contextLength": zod.int().optional()
-}))
+})),
+  "available": zod.boolean(),
+  "geminiImageAvailable": zod.boolean(),
+  "mediaStorageAvailable": zod.boolean()
 })
 
 
@@ -452,19 +455,20 @@ export const ListOpenRouterFreeModelsResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "contextLength": zod.int().optional()
-}))
+})),
+  "accessMode": zod.enum(['replit', 'direct', 'unavailable'])
 })
 
 
 /**
- * @summary Generate a canvas image with Replit's OpenAI integration
+ * @summary Generate a canvas image with Replit OpenAI or direct Gemini
  */
 export const generateCanvasImageBodyPromptMax = 8000;
 
 
 
 export const GenerateCanvasImageBody = zod.object({
-  "model": zod.enum(['gpt-image-1']),
+  "model": zod.enum(['gpt-image-1', 'gemini-nano-banana-2.1', 'gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image', 'gemini-3-pro-image']),
   "prompt": zod.string().min(1).max(generateCanvasImageBodyPromptMax)
 })
 

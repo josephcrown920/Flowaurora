@@ -14,6 +14,8 @@ export type OpenRouterModelChoice = {
   contextLength?: number;
 };
 
+export type OpenRouterAccessMode = "replit" | "direct" | "unavailable";
+
 let modelCache: { expiresAt: number; models: OpenRouterModelChoice[] } | undefined;
 
 export async function listOpenRouterFreeModels(forceRefresh = false): Promise<OpenRouterModelChoice[]> {
@@ -56,33 +58,32 @@ export async function listOpenRouterFreeModels(forceRefresh = false): Promise<Op
   return models;
 }
 
-export async function getOpenRouterClient(): Promise<any> {
+export function getOpenRouterAccessMode(): OpenRouterAccessMode {
   const replitProxyReady =
     Boolean(process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL) &&
     Boolean(process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY);
 
+  if (process.env.REPL_ID && replitProxyReady) return "replit";
+  if (process.env.OPENROUTER_API_KEY?.trim()) return "direct";
+  if (replitProxyReady) return "replit";
+  return "unavailable";
+}
+
+export async function getOpenRouterClient(): Promise<any> {
   // Prefer Replit-managed access while running on Replit so requests use
   // Replit billing. The direct key is the self-hosted fallback.
-  if (process.env.REPL_ID && replitProxyReady) {
+  const accessMode = getOpenRouterAccessMode();
+  if (accessMode === "replit") {
     const integration = await import("@workspace/integrations-openrouter-ai");
     return integration.openrouter;
   }
 
-  if (process.env.OPENROUTER_API_KEY?.trim()) {
+  if (accessMode === "direct") {
     const direct = await import("@workspace/integrations-openrouter-ai/direct");
     return direct.createDirectOpenRouterClient();
   }
 
-  if (replitProxyReady) {
-    const integration = await import("@workspace/integrations-openrouter-ai");
-    return integration.openrouter;
-  }
-
-  throw new Error(
-    process.env.REPL_ID
-      ? "OpenRouter through Replit AI Integrations is not configured."
-      : "OPENROUTER_API_KEY is required outside Replit.",
-  );
+  throw new Error("OpenRouter is not configured. Enable Replit AI Integrations or provide OPENROUTER_API_KEY.");
 }
 
 export async function streamOpenRouterChat(

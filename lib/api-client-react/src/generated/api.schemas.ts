@@ -216,6 +216,23 @@ export interface ModelChoice {
 
 export interface ModelChoicesResponse {
   models: ModelChoice[];
+  available: boolean;
+  geminiImageAvailable: boolean;
+  mediaStorageAvailable: boolean;
+}
+
+export type OpenRouterModelChoicesResponseAccessMode = typeof OpenRouterModelChoicesResponseAccessMode[keyof typeof OpenRouterModelChoicesResponseAccessMode];
+
+
+export const OpenRouterModelChoicesResponseAccessMode = {
+  replit: 'replit',
+  direct: 'direct',
+  unavailable: 'unavailable',
+} as const;
+
+export interface OpenRouterModelChoicesResponse {
+  models: ModelChoice[];
+  accessMode: OpenRouterModelChoicesResponseAccessMode;
 }
 
 export type CanvasImageGenerationInputModel = typeof CanvasImageGenerationInputModel[keyof typeof CanvasImageGenerationInputModel];
@@ -223,6 +240,10 @@ export type CanvasImageGenerationInputModel = typeof CanvasImageGenerationInputM
 
 export const CanvasImageGenerationInputModel = {
   'gpt-image-1': 'gpt-image-1',
+  'gemini-nano-banana-21': 'gemini-nano-banana-2.1',
+  'gemini-31-flash-lite-image': 'gemini-3.1-flash-lite-image',
+  'gemini-31-flash-image': 'gemini-3.1-flash-image',
+  'gemini-3-pro-image': 'gemini-3-pro-image',
 } as const;
 
 export interface CanvasImageGenerationInput {

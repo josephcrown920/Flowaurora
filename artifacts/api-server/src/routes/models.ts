@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { listOpenRouterFreeModels } from "../lib/openrouter";
+import { getOpenRouterAccessMode, listOpenRouterFreeModels } from "../lib/openrouter";
 
 const router: IRouter = Router();
 
@@ -23,12 +23,23 @@ export const OPENAI_CHAT_MODELS = [
 ] as const;
 
 router.get("/ai/models", (_req, res): void => {
-  res.json({ models: OPENAI_CHAT_MODELS });
+  res.json({
+    models: OPENAI_CHAT_MODELS,
+    available: Boolean(
+      process.env.AI_INTEGRATIONS_OPENAI_BASE_URL?.trim() &&
+      process.env.AI_INTEGRATIONS_OPENAI_API_KEY?.trim(),
+    ),
+    geminiImageAvailable: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    mediaStorageAvailable: Boolean(process.env.PRIVATE_OBJECT_DIR?.trim()),
+  });
 });
 
 router.get("/openrouter/models", async (req, res): Promise<void> => {
   try {
-    res.json({ models: await listOpenRouterFreeModels() });
+    res.json({
+      models: await listOpenRouterFreeModels(),
+      accessMode: getOpenRouterAccessMode(),
+    });
   } catch (err) {
     req.log.error({ err }, "OpenRouter model catalog request failed");
     res.status(503).json({ error: "OpenRouter's free text model catalog is unavailable." });
