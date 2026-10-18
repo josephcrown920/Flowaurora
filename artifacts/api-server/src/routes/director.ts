@@ -2,7 +2,6 @@ import { Router, type IRouter } from "express";
 import { db, charactersTable } from "@workspace/db";
 import { inArray } from "drizzle-orm";
 import { ProposeShotsBody, ProposeShotsResponse } from "@workspace/api-zod";
-import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { formatAvailableNodeTypes } from "@workspace/flow-nodes";
 import { assertModelArkModel, streamModelArkChat } from "../lib/modelark";
 
@@ -200,6 +199,7 @@ router.post("/director/orchestrate", async (req, res): Promise<void> => {
         sendEvent({ type: "chunk", text: chunk });
       });
     } else {
+      const { anthropic } = await import("@workspace/integrations-anthropic-ai");
       const stream = anthropic.messages.stream({
         model: "claude-sonnet-4-6",
         max_tokens: 2048,

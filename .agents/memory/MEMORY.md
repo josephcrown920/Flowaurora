@@ -1,0 +1,1 @@
+- [Optional AI providers](optional-ai-providers.md) — keep provider configuration failures scoped to provider-specific requests, not API startup.
