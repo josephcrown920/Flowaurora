@@ -20,6 +20,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CanvasImageGenerationInput,
+  CanvasImageGenerationResponse,
   Character,
   CharacterInput,
   CharacterUpdate,
@@ -28,6 +30,8 @@ import type {
   GenerateShotImageInput,
   HealthStatus,
   ListShotsParams,
+  ModelChoicesResponse,
+  OrchestrateInput,
   Project,
   ProjectInput,
   ProjectUpdate,
@@ -1402,6 +1406,302 @@ export const useProposeShots = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getProposeShotsMutationOptions(options));
+    }
+
+export const getOrchestrateWorkflowUrl = () => {
+
+
+
+
+  return `/api/director/orchestrate`
+}
+
+/**
+ * @summary Stream a workflow designed by the selected chat model
+ */
+export const orchestrateWorkflow = async (orchestrateInput: OrchestrateInput, options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+  return customFetch<string>(getOrchestrateWorkflowUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(orchestrateInput)
+  }
+);}
+
+
+
+
+
+export const getOrchestrateWorkflowMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof orchestrateWorkflow>>, TError,{data: BodyType<OrchestrateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof orchestrateWorkflow>>, TError,{data: BodyType<OrchestrateInput>}, TContext> => {
+
+const mutationKey = ['orchestrateWorkflow'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof orchestrateWorkflow>>, {data: BodyType<OrchestrateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  orchestrateWorkflow(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type OrchestrateWorkflowMutationResult = NonNullable<Awaited<ReturnType<typeof orchestrateWorkflow>>>
+    export type OrchestrateWorkflowMutationBody = BodyType<OrchestrateInput>
+    export type OrchestrateWorkflowMutationError = ErrorType<void>
+
+    /**
+ * @summary Stream a workflow designed by the selected chat model
+ */
+export const useOrchestrateWorkflow = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof orchestrateWorkflow>>, TError,{data: BodyType<OrchestrateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof orchestrateWorkflow>>,
+        TError,
+        {data: BodyType<OrchestrateInput>},
+        TContext
+      > => {
+      return useMutation(getOrchestrateWorkflowMutationOptions(options));
+    }
+
+export const getListReplitChatModelsUrl = () => {
+
+
+
+
+  return `/api/ai/models`
+}
+
+/**
+ * @summary List chat models available through Replit AI Integrations
+ */
+export const listReplitChatModels = async ( options?: Parameters<typeof customFetch>[1]): Promise<ModelChoicesResponse> => {
+
+  return customFetch<ModelChoicesResponse>(getListReplitChatModelsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListReplitChatModelsQueryKey = () => {
+    return [
+    `/api/ai/models`
+    ] as const;
+    }
+
+
+export const getListReplitChatModelsQueryOptions = <TData = Awaited<ReturnType<typeof listReplitChatModels>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReplitChatModels>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListReplitChatModelsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listReplitChatModels>>> = ({ signal }) => listReplitChatModels({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listReplitChatModels>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListReplitChatModelsQueryResult = NonNullable<Awaited<ReturnType<typeof listReplitChatModels>>>
+export type ListReplitChatModelsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List chat models available through Replit AI Integrations
+ */
+
+export function useListReplitChatModels<TData = Awaited<ReturnType<typeof listReplitChatModels>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReplitChatModels>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListReplitChatModelsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListOpenRouterFreeModelsUrl = () => {
+
+
+
+
+  return `/api/openrouter/models`
+}
+
+/**
+ * @summary List currently available free OpenRouter text models
+ */
+export const listOpenRouterFreeModels = async ( options?: Parameters<typeof customFetch>[1]): Promise<ModelChoicesResponse> => {
+
+  return customFetch<ModelChoicesResponse>(getListOpenRouterFreeModelsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListOpenRouterFreeModelsQueryKey = () => {
+    return [
+    `/api/openrouter/models`
+    ] as const;
+    }
+
+
+export const getListOpenRouterFreeModelsQueryOptions = <TData = Awaited<ReturnType<typeof listOpenRouterFreeModels>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOpenRouterFreeModels>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOpenRouterFreeModelsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOpenRouterFreeModels>>> = ({ signal }) => listOpenRouterFreeModels({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOpenRouterFreeModels>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListOpenRouterFreeModelsQueryResult = NonNullable<Awaited<ReturnType<typeof listOpenRouterFreeModels>>>
+export type ListOpenRouterFreeModelsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List currently available free OpenRouter text models
+ */
+
+export function useListOpenRouterFreeModels<TData = Awaited<ReturnType<typeof listOpenRouterFreeModels>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOpenRouterFreeModels>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListOpenRouterFreeModelsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGenerateCanvasImageUrl = () => {
+
+
+
+
+  return `/api/generate/canvas-image`
+}
+
+/**
+ * @summary Generate a canvas image with Replit's OpenAI integration
+ */
+export const generateCanvasImage = async (canvasImageGenerationInput: CanvasImageGenerationInput, options?: Parameters<typeof customFetch>[1]): Promise<CanvasImageGenerationResponse> => {
+
+  return customFetch<CanvasImageGenerationResponse>(getGenerateCanvasImageUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(canvasImageGenerationInput)
+  }
+);}
+
+
+
+
+
+export const getGenerateCanvasImageMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCanvasImage>>, TError,{data: BodyType<CanvasImageGenerationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateCanvasImage>>, TError,{data: BodyType<CanvasImageGenerationInput>}, TContext> => {
+
+const mutationKey = ['generateCanvasImage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateCanvasImage>>, {data: BodyType<CanvasImageGenerationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  generateCanvasImage(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateCanvasImageMutationResult = NonNullable<Awaited<ReturnType<typeof generateCanvasImage>>>
+    export type GenerateCanvasImageMutationBody = BodyType<CanvasImageGenerationInput>
+    export type GenerateCanvasImageMutationError = ErrorType<void>
+
+    /**
+ * @summary Generate a canvas image with Replit's OpenAI integration
+ */
+export const useGenerateCanvasImage = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCanvasImage>>, TError,{data: BodyType<CanvasImageGenerationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateCanvasImage>>,
+        TError,
+        {data: BodyType<CanvasImageGenerationInput>},
+        TContext
+      > => {
+      return useMutation(getGenerateCanvasImageMutationOptions(options));
     }
 
 export const getGenerateCharacterPortraitUrl = () => {

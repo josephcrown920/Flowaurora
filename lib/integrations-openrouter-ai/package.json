@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./batch": "./src/batch/index.ts"
+    "./batch": "./src/batch/index.ts",
+    "./direct": "./src/direct.ts"
   },
   "dependencies": {
     "openai": "^6.27.0",

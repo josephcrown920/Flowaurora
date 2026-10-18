@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './canvasImageGenerationInput';
+export * from './canvasImageGenerationInputModel';
+export * from './canvasImageGenerationResponse';
 export * from './character';
 export * from './characterInput';
 export * from './characterUpdate';
@@ -14,6 +17,12 @@ export * from './generateShotAngleInput';
 export * from './generateShotImageInput';
 export * from './healthStatus';
 export * from './listShotsParams';
+export * from './modelChoice';
+export * from './modelChoicesResponse';
+export * from './orchestrateInput';
+export * from './orchestrateInputCurrentNodesItem';
+export * from './orchestrateInputCurrentNodesItemPosition';
+export * from './orchestrateInputProvider';
 export * from './project';
 export * from './projectInput';
 export * from './projectStatus';

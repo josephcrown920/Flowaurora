@@ -8,3 +8,17 @@ type = "unspecified"
 title = "flows-canvas.zip"
 description = "Drop-in React canvas component — all files, rewritten imports, CSS, and README included."
 logical_id = "dfaf1811-2d53-41bd-95ec-0256244d885e"
+
+[[outputs]]
+id = "2dO1KchXVtiQZQmnh3fea"
+uri = "file://attached_assets/generated_images/flows-credit-smoke-test.png"
+type = "image"
+title = "Replit credit image test"
+description = "A successful sample image from the built-in Replit image generator; the app's connected OpenAI route is still awaiting credentials."
+logical_id = "ffca3cdb-0d7d-471f-b0a2-cc728d929ae1"
+content_hash = "sha256:7eb84209343c61a2062f3142b5b5c046cedd2924a1d4e09c4701fc7a1b5e8e19"
+size = 1432683
+mtime_ms = 1792351654347
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:ec16cd10-2eb3-47c6-8c99-e0669c3e66cf/ffca3cdb-0d7d-471f-b0a2-cc728d929ae1/9fca5a00-615a-4e15-9a06-ed28527242fe"
+storage_version_token = "1792352360204443"
+content_type = "image/png"

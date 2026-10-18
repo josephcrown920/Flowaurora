@@ -172,6 +172,73 @@ export interface ProposeShotsInput {
   characterIds?: number[];
 }
 
+export type OrchestrateInputProvider = typeof OrchestrateInputProvider[keyof typeof OrchestrateInputProvider];
+
+
+export const OrchestrateInputProvider = {
+  claude: 'claude',
+  modelark: 'modelark',
+  openai: 'openai',
+  openrouter: 'openrouter',
+} as const;
+
+export type OrchestrateInputCurrentNodesItemPosition = {
+  x: number;
+  y: number;
+};
+
+export type OrchestrateInputCurrentNodesItem = {
+  /** @maxLength 120 */
+  id: string;
+  /** @maxLength 80 */
+  type: string;
+  position: OrchestrateInputCurrentNodesItemPosition;
+};
+
+export interface OrchestrateInput {
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  description: string;
+  provider?: OrchestrateInputProvider;
+  /** @maxLength 240 */
+  model?: string;
+  /** @maxItems 100 */
+  currentNodes?: OrchestrateInputCurrentNodesItem[];
+}
+
+export interface ModelChoice {
+  id: string;
+  name: string;
+  contextLength?: number;
+}
+
+export interface ModelChoicesResponse {
+  models: ModelChoice[];
+}
+
+export type CanvasImageGenerationInputModel = typeof CanvasImageGenerationInputModel[keyof typeof CanvasImageGenerationInputModel];
+
+
+export const CanvasImageGenerationInputModel = {
+  'gpt-image-1': 'gpt-image-1',
+} as const;
+
+export interface CanvasImageGenerationInput {
+  model: CanvasImageGenerationInputModel;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  prompt: string;
+}
+
+export interface CanvasImageGenerationResponse {
+  imageUrl: string;
+  model: string;
+}
+
 export interface ProposedShot {
   shotType: string;
   cameraAngle: string;

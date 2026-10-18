@@ -20,6 +20,8 @@ tags:
     description: AI Director — proposes shot lists from a logline
   - name: generate
     description: AI-powered image generation for characters and shots
+  - name: models
+    description: Available AI text models
 paths:
   /healthz:
     get:
@@ -381,6 +383,80 @@ paths:
         "503":
           description: AI provider unavailable
 
+  /director/orchestrate:
+    post:
+      operationId: orchestrateWorkflow
+      tags: [director]
+      summary: Stream a workflow designed by the selected chat model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrchestrateInput"
+      responses:
+        "200":
+          description: Server-sent workflow events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          description: Invalid workflow request or model
+        "503":
+          description: Selected AI provider is unavailable
+
+  /ai/models:
+    get:
+      operationId: listReplitChatModels
+      tags: [models]
+      summary: List chat models available through Replit AI Integrations
+      responses:
+        "200":
+          description: Supported OpenAI chat model choices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelChoicesResponse"
+
+  /openrouter/models:
+    get:
+      operationId: listOpenRouterFreeModels
+      tags: [models]
+      summary: List currently available free OpenRouter text models
+      responses:
+        "200":
+          description: Free text model choices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelChoicesResponse"
+        "503":
+          description: OpenRouter's public model catalog is unavailable
+
+  /generate/canvas-image:
+    post:
+      operationId: generateCanvasImage
+      tags: [generate]
+      summary: Generate a canvas image with Replit's OpenAI integration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CanvasImageGenerationInput"
+      responses:
+        "200":
+          description: Generated image stored in App Storage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CanvasImageGenerationResponse"
+        "400":
+          description: Invalid model or prompt
+        "503":
+          description: Replit image generation or media storage is unavailable
+
   /generate/character-portrait:
     post:
       operationId: generateCharacterPortrait
@@ -592,6 +668,57 @@ components:
         characterIds:
           type: array
           items: { type: integer }
+    OrchestrateInput:
+      type: object
+      required: [description]
+      properties:
+        description: { type: string, minLength: 1, maxLength: 4000 }
+        provider:
+          type: string
+          enum: [claude, modelark, openai, openrouter]
+        model: { type: string, maxLength: 240 }
+        currentNodes:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            required: [id, type, position]
+            properties:
+              id: { type: string, maxLength: 120 }
+              type: { type: string, maxLength: 80 }
+              position:
+                type: object
+                required: [x, y]
+                properties:
+                  x: { type: number }
+                  y: { type: number }
+    ModelChoice:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        contextLength: { type: integer }
+    ModelChoicesResponse:
+      type: object
+      required: [models]
+      properties:
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelChoice"
+    CanvasImageGenerationInput:
+      type: object
+      required: [model, prompt]
+      properties:
+        model: { type: string, enum: [gpt-image-1] }
+        prompt: { type: string, minLength: 1, maxLength: 8000 }
+    CanvasImageGenerationResponse:
+      type: object
+      required: [imageUrl, model]
+      properties:
+        imageUrl: { type: string }
+        model: { type: string }
     ProposedShot:
       type: object
       required: [shotType, cameraAngle, prompt, description]

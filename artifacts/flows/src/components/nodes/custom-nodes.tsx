@@ -401,6 +401,9 @@ export function ImageGenNode({ id, data, selected }: any) {
   const { models, catalogError } = useModelArkModels('image');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
+  const [provider, setProvider] = useState<'modelark' | 'replit'>(
+    data?.provider === 'replit' ? 'replit' : 'modelark'
+  );
   const model = typeof data?.model === 'string' ? data.model : '';
   const prompt = typeof data?.prompt === 'string' ? data.prompt : '';
 
@@ -409,14 +412,19 @@ export function ImageGenNode({ id, data, selected }: any) {
   }, [id, model, models, updateNodeData]);
 
   const generate = async () => {
+    const selectedModel = provider === 'replit' ? 'gpt-image-1' : model;
+    if (!selectedModel) return;
     setError('');
     setIsGenerating(true);
     try {
-      const response = await fetch('/api/modelark/images/generations', {
+      const response = await fetch(
+        provider === 'replit' ? '/api/generate/canvas-image' : '/api/modelark/images/generations',
+        {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, prompt }),
-      });
+        body: JSON.stringify({ model: selectedModel, prompt }),
+        }
+      );
       const result = await response.json();
       if (!response.ok) throw new Error(result?.error || 'Image generation failed.');
       updateNodeData(id, { imageUrl: result.imageUrl, generationStatus: 'completed' });
@@ -433,7 +441,7 @@ export function ImageGenNode({ id, data, selected }: any) {
     <BaseNode
       id={id}
       selected={selected}
-      title="ModelArk Image"
+      title={provider === 'replit' ? 'Replit Image' : 'ModelArk Image'}
       icon={Aperture}
       iconColor="text-sky-400"
       inputs={[
@@ -460,20 +468,43 @@ export function ImageGenNode({ id, data, selected }: any) {
           <Aperture className="h-8 w-8 text-sky-400/30" />
         )}
         <span className="absolute bottom-1.5 right-1.5 rounded bg-sky-500/20 border border-sky-500/30 px-1.5 py-0.5 text-[9px] text-sky-400 font-medium">
-          {isGenerating ? 'GENERATING' : data?.imageUrl ? 'READY' : 'MODELARK'}
+          {isGenerating ? 'GENERATING' : data?.imageUrl ? 'READY' : provider === 'replit' ? 'REPLIT CREDITS' : 'MODELARK'}
         </span>
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-[10px] text-muted-foreground uppercase tracking-wider">ModelArk image model</label>
+        <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Image provider</label>
         <select
           className="h-7 rounded-sm border border-border bg-muted/20 text-xs px-1"
-          value={model}
-          onChange={(e) => updateNodeData(id, { model: e.target.value })}
-          aria-label="Image generation model"
+          value={provider}
+          onChange={(e) => {
+            const next = e.target.value === 'replit' ? 'replit' : 'modelark';
+            setProvider(next);
+            updateNodeData(id, { provider: next, model: next === 'replit' ? 'gpt-image-1' : (models[0]?.id ?? '') });
+          }}
+          aria-label="Image provider"
         >
-          {models.map((entry) => <option key={entry.id} value={entry.id}>{entry.id}</option>)}
+          <option value="modelark">ModelArk</option>
+          <option value="replit">OpenAI GPT Image 1 · Replit credits</option>
         </select>
+        {provider === 'modelark' ? (
+          <>
+            <label className="sr-only" htmlFor={`image-model-${id}`}>ModelArk image model</label>
+            <select
+              id={`image-model-${id}`}
+              className="h-7 rounded-sm border border-border bg-muted/20 text-xs px-1"
+              value={model}
+              onChange={(e) => updateNodeData(id, { model: e.target.value })}
+              aria-label="Image generation model"
+            >
+              {models.map((entry) => <option key={entry.id} value={entry.id}>{entry.id}</option>)}
+            </select>
+          </>
+        ) : (
+          <div className="h-7 rounded-sm border border-border/50 bg-muted/20 px-2 flex items-center text-xs text-muted-foreground">
+            gpt-image-1 · 1024×1024
+          </div>
+        )}
       </div>
       <Textarea
         className="min-h-[66px] resize-none text-xs bg-muted/20"
@@ -482,8 +513,8 @@ export function ImageGenNode({ id, data, selected }: any) {
         onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
         aria-label="Image prompt"
       />
-      {error || catalogError ? <p className="text-[10px] text-destructive" role="status">{error || catalogError}</p> : null}
-      <Button size="sm" className="w-full text-xs" disabled={!model || !prompt.trim() || isGenerating} onClick={generate}>
+      {error || (provider === 'modelark' ? catalogError : '') ? <p className="text-[10px] text-destructive" role="status">{error || catalogError}</p> : null}
+      <Button size="sm" className="w-full text-xs" disabled={(provider === 'modelark' && !model) || !prompt.trim() || isGenerating} onClick={generate}>
         {isGenerating ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Sparkles className="mr-2 h-3 w-3" />}
         {isGenerating ? 'Generating…' : 'Generate image'}
       </Button>

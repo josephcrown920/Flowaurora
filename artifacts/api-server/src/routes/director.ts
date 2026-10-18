@@ -4,6 +4,8 @@ import { inArray } from "drizzle-orm";
 import { ProposeShotsBody, ProposeShotsResponse } from "@workspace/api-zod";
 import { formatAvailableNodeTypes } from "@workspace/flow-nodes";
 import { assertModelArkModel, streamModelArkChat } from "../lib/modelark";
+import { getOpenRouterClient, listOpenRouterFreeModels, streamOpenRouterChat } from "../lib/openrouter";
+import { OPENAI_CHAT_MODELS } from "./models";
 
 const router: IRouter = Router();
 
@@ -124,7 +126,12 @@ OUTPUT FORMAT (return ONLY valid JSON, no markdown fences):
 router.post("/director/orchestrate", async (req, res): Promise<void> => {
   const description =
     typeof req.body?.description === "string" ? req.body.description.trim() : "";
-  const provider = req.body?.provider === "modelark" ? "modelark" : "claude";
+  const provider =
+    req.body?.provider === "modelark" ||
+    req.body?.provider === "openai" ||
+    req.body?.provider === "openrouter"
+      ? req.body.provider
+      : "claude";
   const model = typeof req.body?.model === "string" ? req.body.model : "";
   const rawNodes = req.body?.currentNodes;
   if (!description || description.length > 4_000) {
@@ -166,6 +173,34 @@ router.post("/director/orchestrate", async (req, res): Promise<void> => {
       return;
     }
   }
+  if (provider === "openai" && !OPENAI_CHAT_MODELS.some((entry) => entry.id === model)) {
+    res.status(400).json({ error: "Select an available OpenAI chat model." });
+    return;
+  }
+
+  let openrouterClient: any;
+  if (provider === "openrouter") {
+    if (!model || model.length > 240 || !model.endsWith(":free")) {
+      res.status(400).json({ error: "Select a free OpenRouter text model." });
+      return;
+    }
+    try {
+      const freeModels = await listOpenRouterFreeModels();
+      if (!freeModels.some((entry) => entry.id === model)) {
+        res.status(400).json({ error: "That OpenRouter free model is no longer available." });
+        return;
+      }
+      openrouterClient = await getOpenRouterClient();
+    } catch (err) {
+      req.log.warn({ err }, "OpenRouter is not configured for this deployment");
+      res.status(503).json({
+        error: process.env.REPL_ID
+          ? "OpenRouter through Replit AI Integrations is unavailable."
+          : "Add OPENROUTER_API_KEY to use OpenRouter outside Replit.",
+      });
+      return;
+    }
+  }
 
   const hasExisting = currentNodes.length > 0;
 
@@ -195,6 +230,29 @@ router.post("/director/orchestrate", async (req, res): Promise<void> => {
     let accumulated = "";
     if (provider === "modelark") {
       await streamModelArkChat(model, ORCHESTRATE_SYSTEM, userContent, (chunk) => {
+        accumulated += chunk;
+        sendEvent({ type: "chunk", text: chunk });
+      });
+    } else if (provider === "openai") {
+      const { openai } = await import("@workspace/integrations-openai-ai-server");
+      const stream = await openai.chat.completions.create({
+        model,
+        max_completion_tokens: 8192,
+        stream: true,
+        messages: [
+          { role: "system", content: ORCHESTRATE_SYSTEM },
+          { role: "user", content: userContent },
+        ],
+      });
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content;
+        if (typeof content === "string") {
+          accumulated += content;
+          sendEvent({ type: "chunk", text: content });
+        }
+      }
+    } else if (provider === "openrouter") {
+      await streamOpenRouterChat(openrouterClient, model, ORCHESTRATE_SYSTEM, userContent, (chunk) => {
         accumulated += chunk;
         sendEvent({ type: "chunk", text: chunk });
       });

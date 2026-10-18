@@ -10,6 +10,7 @@ import {
   GenerateShotAngleResponse,
 } from "@workspace/api-zod";
 import { asc } from "drizzle-orm";
+import { imageBufferSource, storeModelArkMedia } from "../lib/modelarkMedia";
 
 const router: IRouter = Router();
 
@@ -25,6 +26,34 @@ async function getImageModule() {
 function bufferToDataUrl(buffer: Buffer): string {
   return `data:image/png;base64,${buffer.toString("base64")}`;
 }
+
+router.post("/generate/canvas-image", async (req, res): Promise<void> => {
+  const model = typeof req.body?.model === "string" ? req.body.model : "";
+  const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
+  if (model !== "gpt-image-1" || !prompt || prompt.length > 8_000) {
+    res.status(400).json({ error: "Select gpt-image-1 and provide a prompt up to 8,000 characters." });
+    return;
+  }
+
+  const imgMod = await getImageModule();
+  if (!imgMod) {
+    res.status(503).json({ error: "Replit image generation is unavailable." });
+    return;
+  }
+
+  try {
+    const buffer = await imgMod.generateImageBuffer(prompt, "1024x1024");
+    const imageUrl = await storeModelArkMedia(imageBufferSource(buffer), {
+      kind: "image",
+      contentType: "image/png",
+      maxBytes: 20 * 1024 * 1024,
+    });
+    res.json({ imageUrl, model });
+  } catch (err) {
+    req.log.error({ err, model }, "Replit canvas image generation failed");
+    res.status(503).json({ error: "Image generation failed. Check Replit AI and media storage availability." });
+  }
+});
 
 router.post("/generate/character-portrait", async (req, res): Promise<void> => {
   const parsed = GenerateCharacterPortraitBody.safeParse(req.body);

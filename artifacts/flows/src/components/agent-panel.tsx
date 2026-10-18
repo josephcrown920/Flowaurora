@@ -208,10 +208,14 @@ function NodePill({ type, animate }: { type: string; animate?: boolean }) {
 export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [] }: AgentPanelProps) {
   const [description, setDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [provider, setProvider] = useState<'claude' | 'modelark'>('claude');
+  const [provider, setProvider] = useState<'claude' | 'modelark' | 'openai' | 'openrouter'>('claude');
   const [modelArkModels, setModelArkModels] = useState<string[]>([]);
+  const [openAiModels, setOpenAiModels] = useState<Array<{ id: string; name: string }>>([]);
+  const [openRouterModels, setOpenRouterModels] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [modelArkError, setModelArkError] = useState('');
+  const [openAiError, setOpenAiError] = useState('');
+  const [openRouterError, setOpenRouterError] = useState('');
   const [history, setHistory] = useState<Generation[]>([]);
   const [currentGen, setCurrentGen] = useState<Generation | null>(null);
   // Mode is only meaningful when canvas has existing nodes
@@ -242,16 +246,59 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
           .filter((entry) => entry.capability === 'language')
           .map((entry) => entry.id);
         setModelArkModels(languageModels);
-        setSelectedModel((current) => current || languageModels[0] || '');
       })
       .catch((error) => {
         if (active) setModelArkError(error instanceof Error ? error.message : 'ModelArk model list unavailable.');
       });
+    fetch('/api/ai/models')
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'OpenAI model list unavailable.');
+        return payload?.models as Array<{ id: string; name: string }>;
+      })
+      .then((models) => {
+        if (active && Array.isArray(models)) setOpenAiModels(models);
+      })
+      .catch((error) => {
+        if (active) setOpenAiError(error instanceof Error ? error.message : 'OpenAI model list unavailable.');
+      });
+    fetch('/api/openrouter/models')
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'OpenRouter model list unavailable.');
+        return payload?.models as Array<{ id: string; name: string }>;
+      })
+      .then((models) => {
+        if (active && Array.isArray(models)) setOpenRouterModels(models);
+      })
+      .catch((error) => {
+        if (active) setOpenRouterError(error instanceof Error ? error.message : 'OpenRouter model list unavailable.');
+      });
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    if (provider === 'claude') return;
+    const choices =
+      provider === 'modelark' ? modelArkModels :
+      provider === 'openai' ? openAiModels :
+      openRouterModels;
+    const ids = choices.map((choice) => typeof choice === 'string' ? choice : choice.id);
+    if (!ids.includes(selectedModel)) setSelectedModel(ids[0] || '');
+  }, [provider, modelArkModels, openAiModels, openRouterModels, selectedModel]);
+
   const hasCanvas = currentNodes.length > 0;
   const currentTypes = Array.from(new Set(currentNodes.map(n => n.type)));
+  const currentModels =
+    provider === 'modelark' ? modelArkModels.map((id) => ({ id, name: id })) :
+    provider === 'openai' ? openAiModels :
+    provider === 'openrouter' ? openRouterModels :
+    [];
+  const currentModelError =
+    provider === 'modelark' ? modelArkError :
+    provider === 'openai' ? openAiError :
+    provider === 'openrouter' ? openRouterError :
+    '';
 
   // The current mode for a new generation
   const effectiveMode: ApplyMode = hasCanvas ? mode : 'replace';
@@ -303,6 +350,7 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
           currentNodes: sendCurrentNodes ? currentNodes : undefined,
           provider,
           model: provider === 'modelark' ? selectedModel : undefined,
+          ...(provider === 'openai' || provider === 'openrouter' ? { model: selectedModel } : {}),
         }),
         signal: controller.signal,
       });
@@ -726,31 +774,33 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
         </ScrollArea>
 
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-card border-t border-border/50 backdrop-blur-xl">
-          <div className="mb-2 grid grid-cols-[110px_1fr] gap-2">
+          <div className="mb-2 grid grid-cols-[148px_1fr] gap-2">
             <label className="sr-only" htmlFor="director-provider">AI provider</label>
             <select
               id="director-provider"
               className="h-8 rounded-md border border-border bg-background px-2 text-xs"
               value={provider}
-              onChange={(event) => setProvider(event.target.value === 'modelark' ? 'modelark' : 'claude')}
+              onChange={(event) => setProvider(event.target.value as 'claude' | 'modelark' | 'openai' | 'openrouter')}
               disabled={isLoading}
             >
               <option value="claude">Claude</option>
               <option value="modelark">ModelArk</option>
+              <option value="openai">OpenAI · Replit credits</option>
+              <option value="openrouter">OpenRouter free · credits</option>
             </select>
-            {provider === 'modelark' ? (
+            {provider !== 'claude' ? (
               <>
-                <label className="sr-only" htmlFor="director-model">ModelArk language model</label>
+                <label className="sr-only" htmlFor="director-model">Agent text model</label>
                 <select
                   id="director-model"
                   className="h-8 min-w-0 rounded-md border border-border bg-background px-2 text-xs"
                   value={selectedModel}
                   onChange={(event) => setSelectedModel(event.target.value)}
-                  disabled={isLoading || modelArkModels.length === 0}
+                  disabled={isLoading || currentModels.length === 0}
                 >
-                  {modelArkModels.length === 0
-                    ? <option value="">No language models available</option>
-                    : modelArkModels.map((model) => <option key={model} value={model}>{model}</option>)}
+                  {currentModels.length === 0
+                    ? <option value="">No models available</option>
+                    : currentModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
                 </select>
               </>
             ) : (
@@ -759,8 +809,8 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
               </div>
             )}
           </div>
-          {provider === 'modelark' && modelArkError ? (
-            <p className="mb-2 text-xs text-destructive" role="status">{modelArkError}</p>
+          {currentModelError ? (
+            <p className="mb-2 text-xs text-destructive" role="status">{currentModelError}</p>
           ) : null}
           <div className="relative">
             <Textarea
@@ -794,7 +844,7 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
                 size="icon"
                 className="absolute bottom-3 right-3 h-8 w-8 rounded-md"
                 onClick={handleBuild}
-                disabled={!description.trim() || (provider === 'modelark' && !selectedModel)}
+                disabled={!description.trim() || (provider !== 'claude' && !selectedModel)}
               >
                 <Sparkles className="h-4 w-4" />
               </Button>
