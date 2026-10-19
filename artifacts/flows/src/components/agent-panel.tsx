@@ -213,6 +213,7 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
   const [openAiModels, setOpenAiModels] = useState<Array<{ id: string; name: string }>>([]);
   const [openRouterModels, setOpenRouterModels] = useState<Array<{ id: string; name: string }>>([]);
   const [openAiAvailable, setOpenAiAvailable] = useState<boolean | null>(null);
+  const [openAiAccessMode, setOpenAiAccessMode] = useState<'replit' | 'direct' | 'unavailable' | null>(null);
   const [openRouterAccessMode, setOpenRouterAccessMode] = useState<'replit' | 'direct' | 'unavailable' | null>(null);
   const [selectedModel, setSelectedModel] = useState('');
   const [modelArkError, setModelArkError] = useState('');
@@ -259,12 +260,16 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
         return {
           models: payload?.models as Array<{ id: string; name: string }>,
           available: payload?.available === true,
+          accessMode: ['replit', 'direct', 'unavailable'].includes(payload?.accessMode)
+            ? payload.accessMode as 'replit' | 'direct' | 'unavailable'
+            : 'unavailable',
         };
       })
-      .then(({ models, available }) => {
+      .then(({ models, available, accessMode }) => {
         if (active && Array.isArray(models)) {
           setOpenAiModels(models);
           setOpenAiAvailable(available);
+          setOpenAiAccessMode(accessMode);
         }
       })
       .catch((error) => {
@@ -317,8 +322,12 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
     provider === 'openrouter' ? openRouterError :
     '';
   const providerAccessNote =
-    provider === 'openai' && openAiAvailable === false
-      ? 'Replit OpenAI access is not available to this API runtime yet.'
+    provider === 'openai' && openAiAccessMode === 'direct'
+      ? 'Using your OpenAI API key; these requests are billed by OpenAI, not Replit credits.'
+      : provider === 'openai' && openAiAccessMode === 'replit'
+        ? 'Using Replit AI Integrations for these requests.'
+        : provider === 'openai' && (openAiAvailable === false || openAiAccessMode === 'unavailable')
+          ? 'OpenAI access is unavailable. Check the configured key and account access.'
       : provider === 'openrouter' && openRouterAccessMode === 'direct'
         ? 'Using your OpenRouter key; these requests do not use Replit credits.'
         : provider === 'openrouter' && openRouterAccessMode === 'replit'
@@ -812,7 +821,10 @@ export function AgentPanel({ open, onClose, onApply, onReplace, currentNodes = [
             >
               <option value="claude">Claude</option>
               <option value="modelark">ModelArk</option>
-              <option value="openai">OpenAI · Replit credits{openAiAvailable === false ? ' (unavailable)' : ''}</option>
+              <option value="openai">
+                OpenAI{openAiAccessMode === 'direct' ? ' · direct key' : openAiAccessMode === 'replit' ? ' · Replit credits' : ''}
+                {openAiAvailable === false ? ' (unavailable)' : ''}
+              </option>
               <option value="openrouter">
                 OpenRouter free
                 {openRouterAccessMode === 'replit' ? ' · Replit credits' : openRouterAccessMode === 'direct' ? ' · direct key' : ''}

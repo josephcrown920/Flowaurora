@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-zod";
 import { asc } from "drizzle-orm";
 import { imageBufferSource, storeModelArkMedia } from "../lib/modelarkMedia";
+import { generateOpenAIImageBuffer } from "../lib/openai";
 
 const router: IRouter = Router();
 
@@ -20,15 +21,6 @@ const GEMINI_IMAGE_MODELS = new Set([
   "gemini-3.1-flash-image",
   "gemini-3-pro-image",
 ]);
-
-async function getImageModule() {
-  try {
-    const mod = await import("@workspace/integrations-openai-ai-server/image");
-    return mod;
-  } catch {
-    return null;
-  }
-}
 
 async function generateGeminiImage(model: string, prompt: string): Promise<{ buffer: Buffer; contentType: string }> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -96,12 +88,7 @@ router.post("/generate/canvas-image", async (req, res): Promise<void> => {
     let buffer: Buffer;
     let contentType = "image/png";
     if (model === "gpt-image-1") {
-      const imgMod = await getImageModule();
-      if (!imgMod) {
-        res.status(503).json({ error: "Replit OpenAI image integration is not available in this runtime." });
-        return;
-      }
-      buffer = await imgMod.generateImageBuffer(prompt, "1024x1024");
+      buffer = await generateOpenAIImageBuffer(prompt, "1024x1024");
     } else {
       const generated = await generateGeminiImage(model, prompt);
       buffer = generated.buffer;
@@ -124,7 +111,7 @@ router.post("/generate/canvas-image", async (req, res): Promise<void> => {
     );
     res.status(503).json({
       error: model === "gpt-image-1"
-        ? "Replit image generation or media storage is unavailable."
+        ? "OpenAI image generation or media storage is unavailable. Check the OpenAI key and account access."
         : status === 429
           ? "Google is temporarily rate-limiting this Gemini image model. Try a different Gemini model or retry later."
         : "Gemini image generation or media storage is unavailable.",
@@ -136,12 +123,6 @@ router.post("/generate/character-portrait", async (req, res): Promise<void> => {
   const parsed = GenerateCharacterPortraitBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const imgMod = await getImageModule();
-  if (!imgMod) {
-    res.status(503).json({ error: "AI provider unavailable" });
     return;
   }
 
@@ -164,7 +145,7 @@ router.post("/generate/character-portrait", async (req, res): Promise<void> => {
     .join(" ");
 
   try {
-    const buffer = await imgMod.generateImageBuffer(prompt, "1024x1024");
+    const buffer = await generateOpenAIImageBuffer(prompt, "1024x1024");
     const dataUrl = bufferToDataUrl(buffer);
     const [updated] = await db
       .update(charactersTable)
@@ -182,12 +163,6 @@ router.post("/generate/shot-image", async (req, res): Promise<void> => {
   const parsed = GenerateShotImageBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const imgMod = await getImageModule();
-  if (!imgMod) {
-    res.status(503).json({ error: "AI provider unavailable" });
     return;
   }
 
@@ -224,7 +199,7 @@ router.post("/generate/shot-image", async (req, res): Promise<void> => {
   try {
     // Mark as generating
     await db.update(shotsTable).set({ status: "generating" }).where(eq(shotsTable.id, shot.id));
-    const buffer = await imgMod.generateImageBuffer(prompt, "1536x1024");
+    const buffer = await generateOpenAIImageBuffer(prompt, "1536x1024");
     const dataUrl = bufferToDataUrl(buffer);
     const [updated] = await db
       .update(shotsTable)
@@ -247,12 +222,6 @@ router.post("/generate/shot-angle", async (req, res): Promise<void> => {
   const parsed = GenerateShotAngleBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const imgMod = await getImageModule();
-  if (!imgMod) {
-    res.status(503).json({ error: "AI provider unavailable" });
     return;
   }
 
@@ -305,7 +274,7 @@ router.post("/generate/shot-angle", async (req, res): Promise<void> => {
   }
 
   try {
-    const buffer = await imgMod.generateImageBuffer(prompt, "1536x1024");
+    const buffer = await generateOpenAIImageBuffer(prompt, "1536x1024");
     const dataUrl = bufferToDataUrl(buffer);
     const [updated] = await db
       .update(shotsTable)

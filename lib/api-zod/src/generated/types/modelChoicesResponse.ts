@@ -6,10 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ModelChoice } from './modelChoice';
+import type { ModelChoicesResponseAccessMode } from './modelChoicesResponseAccessMode';
 
 export interface ModelChoicesResponse {
   models: ModelChoice[];
   available: boolean;
+  accessMode: ModelChoicesResponseAccessMode;
   geminiImageAvailable: boolean;
   mediaStorageAvailable: boolean;
 }

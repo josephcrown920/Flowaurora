@@ -1489,7 +1489,7 @@ export const getListReplitChatModelsUrl = () => {
 }
 
 /**
- * @summary List chat models available through Replit AI Integrations
+ * @summary List chat models available through OpenAI providers
  */
 export const listReplitChatModels = async ( options?: Parameters<typeof customFetch>[1]): Promise<ModelChoicesResponse> => {
 
@@ -1536,7 +1536,7 @@ export type ListReplitChatModelsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List chat models available through Replit AI Integrations
+ * @summary List chat models available through OpenAI providers
  */
 
 export function useListReplitChatModels<TData = Awaited<ReturnType<typeof listReplitChatModels>>, TError = ErrorType<unknown>>(

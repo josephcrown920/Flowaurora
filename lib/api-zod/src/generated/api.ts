@@ -433,7 +433,7 @@ export const OrchestrateWorkflowResponse = zod.unknown()
 
 
 /**
- * @summary List chat models available through Replit AI Integrations
+ * @summary List chat models available through OpenAI providers
  */
 export const ListReplitChatModelsResponse = zod.object({
   "models": zod.array(zod.object({
@@ -442,6 +442,7 @@ export const ListReplitChatModelsResponse = zod.object({
   "contextLength": zod.int().optional()
 })),
   "available": zod.boolean(),
+  "accessMode": zod.enum(['replit', 'direct', 'unavailable']),
   "geminiImageAvailable": zod.boolean(),
   "mediaStorageAvailable": zod.boolean()
 })

@@ -19,6 +19,7 @@ export * from './healthStatus';
 export * from './listShotsParams';
 export * from './modelChoice';
 export * from './modelChoicesResponse';
+export * from './modelChoicesResponseAccessMode';
 export * from './openRouterModelChoicesResponse';
 export * from './openRouterModelChoicesResponseAccessMode';
 export * from './orchestrateInput';

@@ -5,7 +5,8 @@ import { ProposeShotsBody, ProposeShotsResponse } from "@workspace/api-zod";
 import { formatAvailableNodeTypes } from "@workspace/flow-nodes";
 import { assertModelArkModel, streamModelArkChat } from "../lib/modelark";
 import { getOpenRouterClient, listOpenRouterFreeModels, streamOpenRouterChat } from "../lib/openrouter";
-import { OPENAI_CHAT_MODELS } from "./models";
+import { getOpenAIClient } from "../lib/openai";
+import { listOpenAIChatModels } from "./models";
 
 const router: IRouter = Router();
 
@@ -17,11 +18,19 @@ router.post("/director/propose-shots", async (req, res): Promise<void> => {
   }
 
   let openai: any;
+  let openAiModel = "";
   try {
-    const mod = await import("@workspace/integrations-openai-ai-server");
-    openai = mod.openai;
+    const selected = await getOpenAIClient();
+    openai = selected.client;
+    const models = await listOpenAIChatModels();
+    openAiModel =
+      models.find((entry) => entry.id === "gpt-5.6-terra")?.id ??
+      models.find((entry) => entry.id === "gpt-5.4")?.id ??
+      models[0]?.id ??
+      "";
+    if (!openAiModel) throw new Error("No supported OpenAI chat model is available.");
   } catch {
-    res.status(503).json({ error: "AI provider unavailable" });
+    res.status(503).json({ error: "OpenAI API access or supported chat models are unavailable." });
     return;
   }
 
@@ -59,7 +68,7 @@ Respond ONLY with a valid JSON object: { "shots": [ { "shotType": "...", "camera
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5.6-terra",
+      model: openAiModel,
       max_completion_tokens: 4096,
       messages: [
         { role: "system", content: systemPrompt },
@@ -173,9 +182,18 @@ router.post("/director/orchestrate", async (req, res): Promise<void> => {
       return;
     }
   }
-  if (provider === "openai" && !OPENAI_CHAT_MODELS.some((entry) => entry.id === model)) {
-    res.status(400).json({ error: "Select an available OpenAI chat model." });
-    return;
+  if (provider === "openai") {
+    try {
+      const models = await listOpenAIChatModels();
+      if (!models.some((entry) => entry.id === model)) {
+        res.status(400).json({ error: "Select a chat model available to your OpenAI account." });
+        return;
+      }
+    } catch (err) {
+      req.log.warn({ err }, "OpenAI chat model access check failed");
+      res.status(503).json({ error: "OpenAI chat model access could not be verified." });
+      return;
+    }
   }
 
   let openrouterClient: any;
@@ -234,8 +252,8 @@ router.post("/director/orchestrate", async (req, res): Promise<void> => {
         sendEvent({ type: "chunk", text: chunk });
       });
     } else if (provider === "openai") {
-      const { openai } = await import("@workspace/integrations-openai-ai-server");
-      const stream = await openai.chat.completions.create({
+      const { client } = await getOpenAIClient();
+      const stream = await client.chat.completions.create({
         model,
         max_completion_tokens: 8192,
         stream: true,
@@ -290,6 +308,8 @@ router.post("/director/orchestrate", async (req, res): Promise<void> => {
       type: "error",
       error: provider === "openrouter" && err?.status === 429
         ? "This free OpenRouter model is temporarily rate-limited upstream. Choose another free model or retry later."
+        : provider === "openai" && [401, 403].includes(Number(err?.status))
+          ? "OpenAI rejected this API key or model access. Check the key and account permissions."
         : "AI provider unavailable",
     });
   } finally {

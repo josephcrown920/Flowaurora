@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { getOpenRouterAccessMode, listOpenRouterFreeModels } from "../lib/openrouter";
+import { getOpenAIClient, getOpenAIAccessMode, type OpenAIAccessMode } from "../lib/openai";
 
 const router: IRouter = Router();
 
@@ -22,16 +23,63 @@ export const OPENAI_CHAT_MODELS = [
   { id: "o3", name: "o3" },
 ] as const;
 
-router.get("/ai/models", (_req, res): void => {
-  res.json({
-    models: OPENAI_CHAT_MODELS,
-    available: Boolean(
-      process.env.AI_INTEGRATIONS_OPENAI_BASE_URL?.trim() &&
-      process.env.AI_INTEGRATIONS_OPENAI_API_KEY?.trim(),
-    ),
-    geminiImageAvailable: Boolean(process.env.GEMINI_API_KEY?.trim()),
-    mediaStorageAvailable: Boolean(process.env.PRIVATE_OBJECT_DIR?.trim()),
-  });
+let directModelCache: { expiresAt: number; models: Array<{ id: string; name: string }> } | undefined;
+
+export async function listOpenAIChatModels(): Promise<Array<{ id: string; name: string }>> {
+  const accessMode = getOpenAIAccessMode();
+  if (accessMode === "unavailable") return [];
+  if (accessMode === "replit") return [...OPENAI_CHAT_MODELS];
+  if (directModelCache && directModelCache.expiresAt > Date.now()) return directModelCache.models;
+
+  const { client } = await getOpenAIClient();
+  const response = await client.models.list();
+  const knownNames = new Map<string, string>(
+    OPENAI_CHAT_MODELS.map((model): [string, string] => [model.id, model.name]),
+  );
+  const chatModelPattern = /^(?:gpt-[56](?:\.\d+)?(?:-[a-z0-9]+)*|o[34](?:-mini)?)$/i;
+  const nonChatModelPattern = /(instruct|search|pro|codex|audio|transcrib|tts|realtime|image|embedding|moderation|whisper|speech|sora|-\d{4}-\d{2}-\d{2}$)/i;
+  const models = (response.data as Array<{ id?: unknown }>)
+    .map((entry) => typeof entry.id === "string" ? entry.id : "")
+    .filter((id) => chatModelPattern.test(id) && !nonChatModelPattern.test(id))
+    .map((id) => ({ id, name: knownNames.get(id) ?? id }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  directModelCache = { models, expiresAt: Date.now() + 5 * 60_000 };
+  return models;
+}
+
+router.get("/ai/models", async (req, res): Promise<void> => {
+  const configuredMode: OpenAIAccessMode = getOpenAIAccessMode();
+  if (configuredMode === "unavailable") {
+    res.json({
+      models: [],
+      available: false,
+      accessMode: "unavailable",
+      geminiImageAvailable: Boolean(process.env.GEMINI_API_KEY?.trim()),
+      mediaStorageAvailable: Boolean(process.env.PRIVATE_OBJECT_DIR?.trim()),
+    });
+    return;
+  }
+
+  try {
+    const models = await listOpenAIChatModels();
+    res.json({
+      models,
+      available: models.length > 0,
+      accessMode: configuredMode,
+      geminiImageAvailable: Boolean(process.env.GEMINI_API_KEY?.trim()),
+      mediaStorageAvailable: Boolean(process.env.PRIVATE_OBJECT_DIR?.trim()),
+    });
+  } catch (err) {
+    req.log.warn({ err }, "OpenAI model access check failed");
+    res.json({
+      models: [],
+      available: false,
+      accessMode: "unavailable",
+      geminiImageAvailable: Boolean(process.env.GEMINI_API_KEY?.trim()),
+      mediaStorageAvailable: Boolean(process.env.PRIVATE_OBJECT_DIR?.trim()),
+    });
+  }
 });
 
 router.get("/openrouter/models", async (req, res): Promise<void> => {

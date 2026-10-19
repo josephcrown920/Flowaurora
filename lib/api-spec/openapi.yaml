@@ -410,10 +410,10 @@ paths:
     get:
       operationId: listReplitChatModels
       tags: [models]
-      summary: List chat models available through Replit AI Integrations
+      summary: List chat models available through OpenAI providers
       responses:
         "200":
-          description: Supported OpenAI chat model choices and Replit integration readiness
+          description: Supported OpenAI chat model choices and provider access mode
           content:
             application/json:
               schema:
@@ -701,13 +701,14 @@ components:
         contextLength: { type: integer }
     ModelChoicesResponse:
       type: object
-      required: [models, available, geminiImageAvailable, mediaStorageAvailable]
+      required: [models, available, accessMode, geminiImageAvailable, mediaStorageAvailable]
       properties:
         models:
           type: array
           items:
             $ref: "#/components/schemas/ModelChoice"
         available: { type: boolean }
+        accessMode: { type: string, enum: [replit, direct, unavailable] }
         geminiImageAvailable: { type: boolean }
         mediaStorageAvailable: { type: boolean }
     OpenRouterModelChoicesResponse:

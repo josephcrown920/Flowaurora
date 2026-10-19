@@ -214,9 +214,19 @@ export interface ModelChoice {
   contextLength?: number;
 }
 
+export type ModelChoicesResponseAccessMode = typeof ModelChoicesResponseAccessMode[keyof typeof ModelChoicesResponseAccessMode];
+
+
+export const ModelChoicesResponseAccessMode = {
+  replit: 'replit',
+  direct: 'direct',
+  unavailable: 'unavailable',
+} as const;
+
 export interface ModelChoicesResponse {
   models: ModelChoice[];
   available: boolean;
+  accessMode: ModelChoicesResponseAccessMode;
   geminiImageAvailable: boolean;
   mediaStorageAvailable: boolean;
 }

@@ -401,9 +401,10 @@ export function ImageGenNode({ id, data, selected }: any) {
   const { models, catalogError } = useModelArkModels('image');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
-  const [provider, setProvider] = useState<'modelark' | 'replit' | 'gemini'>(
-    data?.provider === 'replit' ? 'replit' : data?.provider === 'gemini' ? 'gemini' : 'modelark'
+  const [provider, setProvider] = useState<'modelark' | 'openai' | 'gemini'>(
+    data?.provider === 'openai' || data?.provider === 'replit' ? 'openai' : data?.provider === 'gemini' ? 'gemini' : 'modelark'
   );
+  const [openAiAccessMode, setOpenAiAccessMode] = useState<'replit' | 'direct' | 'unavailable'>('unavailable');
   const model = typeof data?.model === 'string' ? data.model : '';
   const prompt = typeof data?.prompt === 'string' ? data.prompt : '';
   const geminiModels = [
@@ -417,9 +418,24 @@ export function ImageGenNode({ id, data, selected }: any) {
     if (!model && models.length > 0) updateNodeData(id, { model: models[0].id });
   }, [id, model, models, updateNodeData]);
 
+  React.useEffect(() => {
+    let active = true;
+    fetch('/api/ai/models')
+      .then((response) => response.json())
+      .then((payload) => {
+        if (!active) return;
+        const mode = payload?.accessMode;
+        setOpenAiAccessMode(mode === 'direct' || mode === 'replit' ? mode : 'unavailable');
+      })
+      .catch(() => {
+        if (active) setOpenAiAccessMode('unavailable');
+      });
+    return () => { active = false; };
+  }, []);
+
   const generate = async () => {
-    const selectedModel = provider === 'replit' ? 'gpt-image-1' : model;
-    if (!selectedModel) return;
+    const selectedModel = provider === 'openai' ? 'gpt-image-1' : model;
+    if (!selectedModel || (provider === 'openai' && openAiAccessMode === 'unavailable')) return;
     setError('');
     setIsGenerating(true);
     try {
@@ -447,7 +463,7 @@ export function ImageGenNode({ id, data, selected }: any) {
     <BaseNode
       id={id}
       selected={selected}
-      title={provider === 'replit' ? 'Replit Image' : provider === 'gemini' ? 'Gemini Image' : 'ModelArk Image'}
+      title={provider === 'openai' ? 'OpenAI Image' : provider === 'gemini' ? 'Gemini Image' : 'ModelArk Image'}
       icon={Aperture}
       iconColor="text-sky-400"
       inputs={[
@@ -474,7 +490,7 @@ export function ImageGenNode({ id, data, selected }: any) {
           <Aperture className="h-8 w-8 text-sky-400/30" />
         )}
         <span className="absolute bottom-1.5 right-1.5 rounded bg-sky-500/20 border border-sky-500/30 px-1.5 py-0.5 text-[9px] text-sky-400 font-medium">
-          {isGenerating ? 'GENERATING' : data?.imageUrl ? 'READY' : provider === 'replit' ? 'REPLIT CREDITS' : provider === 'gemini' ? 'GOOGLE API' : 'MODELARK'}
+          {isGenerating ? 'GENERATING' : data?.imageUrl ? 'READY' : provider === 'openai' ? (openAiAccessMode === 'direct' ? 'OPENAI API' : 'REPLIT CREDITS') : provider === 'gemini' ? 'GOOGLE API' : 'MODELARK'}
         </span>
       </div>
 
@@ -484,11 +500,11 @@ export function ImageGenNode({ id, data, selected }: any) {
           className="h-7 rounded-sm border border-border bg-muted/20 text-xs px-1"
           value={provider}
           onChange={(e) => {
-            const next = e.target.value === 'replit' || e.target.value === 'gemini' ? e.target.value : 'modelark';
+            const next = e.target.value === 'openai' || e.target.value === 'gemini' ? e.target.value : 'modelark';
             setProvider(next);
             updateNodeData(id, {
               provider: next,
-              model: next === 'replit'
+              model: next === 'openai'
                 ? 'gpt-image-1'
                 : next === 'gemini'
                   ? geminiModels[0].id
@@ -498,7 +514,9 @@ export function ImageGenNode({ id, data, selected }: any) {
           aria-label="Image provider"
         >
           <option value="modelark">ModelArk</option>
-          <option value="replit">OpenAI GPT Image 1 · Replit credits</option>
+          <option value="openai">
+            OpenAI GPT Image 1 · {openAiAccessMode === 'direct' ? 'OpenAI API billing' : openAiAccessMode === 'replit' ? 'Replit credits' : 'unavailable'}
+          </option>
           <option value="gemini">Gemini image · Google API billing</option>
         </select>
         {provider === 'modelark' ? (
@@ -534,6 +552,15 @@ export function ImageGenNode({ id, data, selected }: any) {
           </div>
         )}
       </div>
+      {provider === 'openai' ? (
+        <p className="text-[9px] text-muted-foreground" role="status">
+          {openAiAccessMode === 'direct'
+            ? 'Uses your OpenAI API key; image requests are billed by OpenAI.'
+            : openAiAccessMode === 'replit'
+              ? 'Uses Replit AI Integrations and Replit credits.'
+              : 'OpenAI is not available to this API runtime.'}
+        </p>
+      ) : null}
       <Textarea
         className="min-h-[66px] resize-none text-xs bg-muted/20"
         placeholder="Describe the image to create..."
@@ -542,7 +569,12 @@ export function ImageGenNode({ id, data, selected }: any) {
         aria-label="Image prompt"
       />
       {error || (provider === 'modelark' ? catalogError : '') ? <p className="text-[10px] text-destructive" role="status">{error || catalogError}</p> : null}
-      <Button size="sm" className="w-full text-xs" disabled={(provider === 'modelark' && !model) || !prompt.trim() || isGenerating} onClick={generate}>
+      <Button
+        size="sm"
+        className="w-full text-xs"
+        disabled={(provider === 'modelark' && !model) || (provider === 'openai' && openAiAccessMode === 'unavailable') || !prompt.trim() || isGenerating}
+        onClick={generate}
+      >
         {isGenerating ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Sparkles className="mr-2 h-3 w-3" />}
         {isGenerating ? 'Generating…' : 'Generate image'}
       </Button>
