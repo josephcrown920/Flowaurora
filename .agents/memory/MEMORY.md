@@ -1,1 +1,2 @@
 - [Optional AI providers](optional-ai-providers.md) — keep provider configuration failures scoped to provider-specific requests, not API startup.
+- [Replit AI integration status](replit-ai-integration-status.md) — environment variables can exist while the AI proxy still reports that integration is not configured.
